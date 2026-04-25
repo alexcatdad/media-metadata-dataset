@@ -24,3 +24,16 @@ def test_ai_credentials_smoke_reports_missing_values() -> None:
 
     with pytest.raises(ValueError, match="CLOUDFLARE_API_TOKEN"):
         settings.require_ai_credentials()
+
+
+def test_openai_compat_defaults_live_in_settings() -> None:
+    settings = Settings()
+
+    assert settings.openai_compat_base_url == "https://openrouter.ai/api/v1"
+    assert settings.openai_compat_models == [
+        "inclusionai/ling-2.6-flash:free",
+        "inclusionai/ling-2.6-1t:free",
+        "liquid/lfm-2.5-1.2b-instruct:free",
+        "openai/gpt-oss-20b:free",
+        "baidu/qianfan-ocr-fast:free",
+    ]

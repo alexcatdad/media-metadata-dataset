@@ -33,6 +33,23 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="OPENAI_COMPAT_API_KEY",
     )
+    openai_compat_base_url: str = Field(
+        default="https://openrouter.ai/api/v1",
+        validation_alias="OPENAI_COMPAT_BASE_URL",
+    )
+    openai_compat_default_model: str = Field(
+        default="inclusionai/ling-2.6-flash:free",
+        validation_alias="OPENAI_COMPAT_DEFAULT_MODEL",
+    )
+    openai_compat_fallback_models: str = Field(
+        default=(
+            "inclusionai/ling-2.6-1t:free,"
+            "liquid/lfm-2.5-1.2b-instruct:free,"
+            "openai/gpt-oss-20b:free,"
+            "baidu/qianfan-ocr-fast:free"
+        ),
+        validation_alias="OPENAI_COMPAT_FALLBACK_MODELS",
+    )
 
     def require_ai_credentials(self) -> None:
         """Validate required AI credentials without exposing their values."""
@@ -50,3 +67,14 @@ class Settings(BaseSettings):
         if missing:
             missing_list = ", ".join(missing)
             raise ValueError(f"missing required AI credential settings: {missing_list}")
+
+    @property
+    def openai_compat_models(self) -> list[str]:
+        """Return the default model followed by configured fallbacks."""
+
+        fallback_models = [
+            model.strip()
+            for model in self.openai_compat_fallback_models.split(",")
+            if model.strip()
+        ]
+        return [self.openai_compat_default_model, *fallback_models]

@@ -14,12 +14,18 @@ policy, and all model calls must be cached, budgeted, and auditable.
 | Task | Provider | Model | Why |
 |---|---|---|---|
 | Entity/document embeddings | Cloudflare Workers AI | `@cf/baai/bge-m3` | Free daily allocation, cloud CI friendly, multilingual, long context, documented embedding API, and Cloudflare says Workers AI customer content is not used to train or improve models/services without explicit consent. |
-| LLM structured judgment | OpenRouter free model | `qwen/qwen3-next-80b-a3b-instruct:free` | Current free model with structured output support, large context, and good fit for multilingual metadata judgment. |
-| LLM heavier adjudication fallback | OpenRouter free model | `nvidia/nemotron-3-super-120b-a12b:free` | Current free model with structured output and reasoning support. Use when the primary model is unavailable or evals show a task needs it. |
-| LLM fast fallback | OpenRouter free model | `inclusionai/ling-2.6-flash:free` | Current free model with structured output support. Useful for low-risk batch classification if primary/fallback are rate limited. |
+| LLM structured judgment | OpenRouter free model | `inclusionai/ling-2.6-flash:free` | Empirical benchmark winner for the first Manami-derived identity/relationship task: reachable, valid JSON, correct, structured-output capable, and low latency. |
+| LLM judgment fallback | OpenRouter free model | `inclusionai/ling-2.6-1t:free` | Correct JSON result in benchmark with structured-output support and moderate latency. |
+| LLM judgment fallback | OpenRouter free model | `liquid/lfm-2.5-1.2b-instruct:free` | Fastest correct JSON result in benchmark, but lacks advertised structured-output support, so keep as fallback rather than primary. |
+| LLM judgment fallback | OpenRouter free model | `openai/gpt-oss-20b:free` | Correct JSON result in benchmark with moderate latency. |
+| LLM judgment fallback | OpenRouter free model | `baidu/qianfan-ocr-fast:free` | Correct JSON result in benchmark; surprising but usable as a late fallback. |
 
 Do not use `openrouter/free` for canonical decisions because it selects from free models dynamically.
 It is acceptable for experiments and smoke tests where model identity is not part of the artifact.
+
+Do not use `qwen/qwen3-next-80b-a3b-instruct:free` as the primary until a later benchmark proves it
+is reliably reachable. It looked strong in docs/catalog metadata but was upstream rate-limited in the
+first real benchmark.
 
 ## Secondary / Benchmark Routes
 

@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 
 from media_offline_database.artifacts import write_keyless_smoke_artifact
+from media_offline_database.llm import openai_compat_handshake
 from media_offline_database.settings import Settings
 from media_offline_database.sources import SourceRole
 
@@ -56,6 +57,22 @@ def credentials_smoke() -> None:
             "openai_compat_api_key": "present",
         }
     )
+
+
+@app.command()
+def openrouter_smoke() -> None:
+    """Run a tiny local OpenRouter model handshake using typed settings."""
+
+    settings = Settings()
+    if not settings.openai_compat_api_key:
+        raise typer.BadParameter("OPENAI_COMPAT_API_KEY is required")
+
+    results = openai_compat_handshake(
+        api_key=settings.openai_compat_api_key,
+        base_url=settings.openai_compat_base_url,
+        models=settings.openai_compat_models,
+    )
+    console.print([result.model_dump() for result in results])
 
 
 @app.command()

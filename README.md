@@ -44,6 +44,7 @@ docker compose run --rm app ruff check .
 docker compose run --rm app pyright
 docker compose run --rm app pytest
 docker compose run --rm app mod smoke-artifact
+docker compose run --rm app mod openrouter-smoke
 ```
 
 CI runs a keyless precursor before any provider credentials are needed: image build, CLI smoke,
