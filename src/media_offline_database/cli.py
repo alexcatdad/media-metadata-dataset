@@ -44,6 +44,21 @@ def doctor() -> None:
 
 
 @app.command()
+def credentials_smoke() -> None:
+    """Verify required AI credential names are wired without printing secrets."""
+
+    settings = Settings()
+    settings.require_ai_credentials()
+    console.print(
+        {
+            "cloudflare_account_id": "present",
+            "cloudflare_api_token": "present",
+            "openai_compat_api_key": "present",
+        }
+    )
+
+
+@app.command()
 def smoke_artifact(
     output_dir: SmokeOutputDirOption = DEFAULT_SMOKE_OUTPUT_DIR,
 ) -> None:

@@ -49,6 +49,12 @@ docker compose run --rm app mod smoke-artifact
 CI runs a keyless precursor before any provider credentials are needed: image build, CLI smoke,
 Ruff, Pyright, pytest policy/data/model tests, and tiny Parquet artifact generation.
 
+When AI credentials are configured, CI also runs a credentials wiring smoke test. The current GitHub
+shape is:
+
+- repository variable: `CLOUDFLARE_ACCOUNT_ID`
+- repository secrets: `CLOUDFLARE_API_TOKEN`, `OPENAI_COMPAT_API_KEY`
+
 ## Source Policy
 
 Provider credentials grant access, not redistribution rights. Each source must be classified as one
