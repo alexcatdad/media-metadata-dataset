@@ -260,8 +260,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--case-file", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path(".mod/out/benchmarks/openrouter-free"))
-    parser.add_argument("--limit", type=int, default=0, help="Limit models tested; 0 means all.")
-    parser.add_argument("--delay-seconds", type=float, default=2.0)
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum models tested. Default is intentionally small to respect free daily limits.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Test every discovered free model. Use only for explicit benchmark runs.",
+    )
+    parser.add_argument("--delay-seconds", type=float, default=4.0)
     return parser.parse_args()
 
 
@@ -276,7 +286,7 @@ def main() -> None:
 
     with httpx.Client(timeout=30) as client:
         models = fetch_free_models(client)
-        if args.limit > 0:
+        if not args.all:
             models = models[: args.limit]
         key_metadata = fetch_key_metadata(client, api_key)
 

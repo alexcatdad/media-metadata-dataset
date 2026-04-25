@@ -57,6 +57,8 @@ first real benchmark.
 - Cloudflare Workers AI supports OpenAI-compatible `/v1/embeddings`.
 - OpenRouter free models are capped and availability may change. Current no-credit accounts are
   documented at 50 free-model requests/day and 20 requests/minute.
+- Full-catalog benchmarks must be explicit and rare. The benchmark script defaults to five models,
+  waits between calls, and requires `--all` before testing every free model.
 - Gemini API free tier includes `gemini-embedding-001`, but free-tier content is used to improve
   Google products.
 - Hugging Face Inference Providers support feature extraction, but the free user credit pool is too

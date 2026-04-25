@@ -53,3 +53,10 @@ Use this order for now:
 5. `baidu/qianfan-ocr-fast:free`
 
 Raw local run artifacts were written under `.mod/out/benchmarks/openrouter-free/`.
+
+## Follow-up Guardrail
+
+After this run, the benchmark harness was changed so it tests only five models by default, waits
+four seconds between calls, and requires `--all` for another full-catalog run. Full runs should be
+rare and explicit because OpenRouter free models have strict daily limits and upstream providers can
+be rate-limited even when the catalog lists a model as free.
