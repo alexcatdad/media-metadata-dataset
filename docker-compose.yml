@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - .:/app
+      - mod-cache:/app/.mod/cache
+      - uv-cache:/root/.cache/uv
+    working_dir: /app
+
+volumes:
+  mod-cache:
+  uv-cache:

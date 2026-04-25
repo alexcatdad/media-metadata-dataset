@@ -1,0 +1,28 @@
+steps:
+  build:
+    image: docker:29-cli
+    commands:
+      - docker build -t media-metadata-dataset:ci .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  ruff:
+    image: docker:29-cli
+    commands:
+      - docker run --rm media-metadata-dataset:ci ruff check .
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  pyright:
+    image: docker:29-cli
+    commands:
+      - docker run --rm media-metadata-dataset:ci pyright
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  pytest:
+    image: docker:29-cli
+    commands:
+      - docker run --rm media-metadata-dataset:ci pytest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
