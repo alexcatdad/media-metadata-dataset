@@ -1,0 +1,51 @@
+{
+  "id": "z-ai",
+  "name": "Z.ai",
+  "status": "enabled",
+  "canonical_eligible": false,
+  "docs": {
+    "introduction": "https://docs.z.ai/api-reference/introduction",
+    "chat_completions": "https://docs.z.ai/api-reference/llm/chat-completion"
+  },
+  "auth": {
+    "scheme": "bearer",
+    "env": "Z_AI_API_KEY_SECRET",
+    "header": "Authorization",
+    "format": "Bearer ${ZAI_API_KEY}",
+    "notes": "ZAI_API_KEY is the full id.secret API key. Local env may store the full key in Z_AI_API_KEY_SECRET or split it with Z_AI_API_KEY_ID."
+  },
+  "base_url": "https://api.z.ai/api/paas/v4",
+  "tasks": ["chat_json_judgment"],
+  "limits": {
+    "max_concurrency": 1,
+    "requests_per_minute": null,
+    "requests_per_day": null,
+    "per_run_request_budget": 2
+  },
+  "data_use": {
+    "free_tier_content_used_to_improve_products": "unknown",
+    "notes": "Direct free lane is attractive because limits are concurrency-based, but keep benchmark-only until data-use terms are documented."
+  },
+  "models": [
+    {
+      "id": "glm-4.5-flash",
+      "role": "fallback_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "supports_structured_output": true,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct valid JSON in the fresh qualified rerun at 12117 ms."
+    },
+    {
+      "id": "glm-4.7-flash",
+      "role": "benchmark_candidate",
+      "free_tier": "free",
+      "task": "chat_json_judgment",
+      "supports_structured_output": true,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": false,
+      "notes": "Returned overload code 1305 in first direct benchmark attempts."
+    }
+  ]
+}

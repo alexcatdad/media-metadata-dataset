@@ -1,0 +1,62 @@
+{
+  "manifest_version": 1,
+  "slice_id": "bootstrap-designated-survivor-v1",
+  "slice_family": "challenge",
+  "entity_model": "bootstrap-entity-v1",
+  "dataset": {
+    "path": "bootstrap-designated-survivor-v1.jsonl",
+    "sha256": "869bdaf5d027348de15f8340a7e75342922fac2f72ca64525985fb185bf8dd2a",
+    "entity_count": 2,
+    "relationship_count": 2,
+    "domains": [
+      "tv"
+    ],
+    "entity_ids_in_order": [
+      "tv:tvmaze:8167",
+      "tv:tvmaze:41818"
+    ],
+    "relationship_counts": {
+      "remake_reboot": 2
+    },
+    "duplicate_title_counts": []
+  },
+  "proves": [
+    "A US original and a Korean remake stay separate even when the franchise naming is close.",
+    "The slice keeps remake/reboot edges symmetric in both directions.",
+    "Original-title differences survive normalization and remain part of the checked-in contract."
+  ],
+  "anchors": [
+    {
+      "entity_id": "tv:tvmaze:8167",
+      "checks": {
+        "title": "Designated Survivor",
+        "original_title": "Designated Survivor",
+        "domain": "tv",
+        "media_type": "TV",
+        "source_role": "BACKBONE_SOURCE",
+        "relationship_types": [
+          "remake_reboot"
+        ],
+        "related_targets": [
+          "tv:tvmaze:41818"
+        ]
+      }
+    },
+    {
+      "entity_id": "tv:tvmaze:41818",
+      "checks": {
+        "title": "Designated Survivor: 60 Days",
+        "original_title": "60일, 지정생존자",
+        "domain": "tv",
+        "media_type": "TV",
+        "source_role": "BACKBONE_SOURCE",
+        "relationship_types": [
+          "remake_reboot"
+        ],
+        "related_targets": [
+          "tv:tvmaze:8167"
+        ]
+      }
+    }
+  ]
+}

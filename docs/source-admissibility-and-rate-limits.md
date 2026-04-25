@@ -72,6 +72,32 @@ Scheduled GitHub Actions and Woodpecker runs should use the same containerized c
 local development. Local bootstrap can use larger mounted caches and personal tokens, but it still
 must run inside Docker and obey provider caps.
 
+## Access and Auth Matrix
+
+This table is about how we access a provider, not whether its data is redistributable.
+
+| Source | Read access mode for this project | Current env / credential shape | Notes |
+|---|---|---|---|
+| manami anime-offline-database | Public release assets | none | Prefer GitHub releases over repeated API fetches. |
+| Wikidata dumps | Public dumps / public query endpoints | none | Prefer dumps/incrementals over live SPARQL where possible. |
+| TVmaze | Public API | none | Send a polite User-Agent and obey cache/update guidance. |
+| Open Library | Public API / dumps | none | Send a descriptive User-Agent; anonymous API is documented at 1 req/s. |
+| TMDB daily ID exports | Authenticated file access | `TMDB_READ_ACCESS_TOKEN` | Use for IDs/export evidence only, not a mirrored metadata DB. |
+| TMDB API | Authenticated API | `TMDB_READ_ACCESS_TOKEN` | Bearer token; local evidence/runtime only. |
+| AniDB title dumps | Registered client | `ANIDB_CLIENT_NAME`, `ANIDB_CLIENT_VERSION` | Client identity only; obey title-dump and cache rules. |
+| AniDB HTTP API | Registered client | `ANIDB_CLIENT_NAME`, `ANIDB_CLIENT_VERSION` | Send `client`, `clientver`, `protover=1`; heavy cache required. |
+| AniList | Public GraphQL read | none required today | `POST https://graphql.anilist.co` with `query` and `variables`; OAuth is user-flow oriented and not needed for our current read-only use. |
+| MyAnimeList official API | Client-auth read | `MAL_CLIENT_ID` | Read-only metadata works with `X-MAL-CLIENT-ID`; user OAuth is not required for current catalog reads. |
+| Jikan | Public API | none | Unofficial fallback only; do not treat it as canonical. |
+| Kitsu | Public API or optional client app later | none required today | Start unauthenticated unless we discover a real need for app credentials. |
+| Anime News Network | Public web/API evidence only | none required today | Use only targeted local checks until permission/terms are clearer. |
+| Simkl | App/client auth likely needed | `SIMKL_CLIENT_ID`, `SIMKL_CLIENT_SECRET` if used | Not needed for phase-one bootstrap. |
+| TheTVDB | API key / licensed access | `TVDB_API_KEY` if used | Not needed for current bootstrap; IDs/runtime only unless licensed. |
+| IMDb datasets | Public dataset download | none | No scraping; local research only. |
+| Trakt | App/client auth | `TRAKT_CLIENT_ID`, `TRAKT_CLIENT_SECRET` if used | Not needed for current bootstrap. |
+| OMDb | API key | `OMDB_API_KEY` if used | Not needed for current bootstrap. |
+| JustWatch | Partner/runtime token | `JUSTWATCH_TOKEN` if used | Not needed for current bootstrap; runtime-only posture. |
+
 ## Current Source Plan
 
 | Source | Role | Published use | Rate limit / fetch policy | Default cap | Evidence |

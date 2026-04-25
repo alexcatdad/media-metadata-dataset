@@ -20,18 +20,25 @@ steps:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  pytest:
+  contract-tests:
     image: docker:29-cli
     commands:
-      - docker run --rm media-metadata-dataset:ci pytest
+      - docker run --rm media-metadata-dataset:ci ./scripts/ci/run_contract_tests.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  keyless-smoke-artifact:
+  dataset-tests:
+    image: docker:29-cli
+    commands:
+      - docker run --rm media-metadata-dataset:ci ./scripts/ci/run_dataset_tests.sh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  dataset-smoke-artifacts:
     image: docker:29-cli
     commands:
       - mkdir -p .mod/out
-      - docker run --rm -v "$PWD/.mod/out:/app/.mod/out" media-metadata-dataset:ci mod smoke-artifact --output-dir .mod/out/keyless-smoke
-      - ls -la .mod/out/keyless-smoke
+      - docker run --rm -v "$PWD/.mod/out:/app/.mod/out" media-metadata-dataset:ci ./scripts/ci/run_artifact_smokes.sh
+      - find .mod/out -maxdepth 2 -type f | sort
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

@@ -44,17 +44,28 @@ docker compose run --rm app ruff check .
 docker compose run --rm app pyright
 docker compose run --rm app pytest
 docker compose run --rm app mod smoke-artifact
+docker compose run --rm app mod bootstrap-artifact
+docker compose run --rm app mod anime-build --input-path /path/to/anime-offline-database.json --title-contains 'Made in Abyss'
 docker compose run --rm app mod openrouter-smoke
 ```
 
 CI runs a keyless precursor before any provider credentials are needed: image build, CLI smoke,
-Ruff, Pyright, pytest policy/data/model tests, and tiny Parquet artifact generation.
+Ruff, Pyright, focused contract tests, focused dataset tests, and deterministic smoke artifact
+generation.
 
 When AI credentials are configured, CI also runs a credentials wiring smoke test. The current GitHub
 shape is:
 
 - repository variable: `CLOUDFLARE_ACCOUNT_ID`
 - repository secrets: `CLOUDFLARE_API_TOKEN`, `OPENAI_COMPAT_API_KEY`
+
+The current deterministic CI lanes are repo-owned scripts:
+
+```sh
+docker compose run --rm app ./scripts/ci/run_contract_tests.sh
+docker compose run --rm app ./scripts/ci/run_dataset_tests.sh
+docker compose run --rm app ./scripts/ci/run_artifact_smokes.sh
+```
 
 ## Source Policy
 
@@ -90,8 +101,27 @@ Never commit real secrets.
 
 ```text
 src/media_offline_database/  Python package and CLI
+corpus/                      Tiny checked-in seed corpora for architecture bootstrap
 tests/                       Smoke and policy tests
 docs/                        Decision log and source policy
 .github/workflows/           GitHub Actions CI
 .woodpecker/                 Woodpecker CI
+```
+
+## Current Build Flow
+
+The current anime build spine is intentionally staged so we can keep improving the dataset without
+rewriting the whole pipeline:
+
+1. normalize a scheduled manami snapshot into bootstrap-like JSONL
+2. refine generic anime relations with AniList
+3. enrich anime metadata such as genres, studios, and creators
+4. compile the result into versioned Parquet artifacts plus a manifest
+
+The composed entrypoint is:
+
+```sh
+docker compose run --rm app mod anime-build \
+  --input-path /path/to/anime-offline-database.json \
+  --title-contains 'Made in Abyss'
 ```

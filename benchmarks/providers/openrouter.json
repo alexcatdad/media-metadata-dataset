@@ -1,0 +1,197 @@
+{
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "status": "enabled",
+  "canonical_eligible": true,
+  "docs": {
+    "models": "https://openrouter.ai/models",
+    "free_route": "https://openrouter.ai/openrouter/free",
+    "keys": "https://openrouter.ai/settings/keys"
+  },
+  "auth": {
+    "scheme": "bearer",
+    "env": "OPENAI_COMPAT_API_KEY",
+    "header": "Authorization",
+    "format": "Bearer ${OPENAI_COMPAT_API_KEY}"
+  },
+  "base_url": "https://openrouter.ai/api/v1",
+  "tasks": ["chat_json_judgment"],
+  "limits": {
+    "max_concurrency": 1,
+    "requests_per_minute": 20,
+    "requests_per_day": 50,
+    "per_run_request_budget": 5
+  },
+  "data_use": {
+    "free_tier_content_used_to_improve_products": "provider/model dependent",
+    "notes": "OpenRouter routes to upstream providers. Record resolved model identity for canonical decisions."
+  },
+  "models": [
+    {
+      "id": "openai/gpt-oss-20b:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": true,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct valid JSON in the fresh qualified rerun at 3996 ms."
+    },
+    {
+      "id": "openai/gpt-oss-120b:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": true,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct valid JSON in the fresh qualified rerun at 4717 ms."
+    },
+    {
+      "id": "liquid/lfm-2.5-1.2b-instruct:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": false,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Current qualified rerun winner at 831 ms. Keep in ranking, but note the lack of advertised structured-output support."
+    },
+    {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun hit upstream 429 rate limiting."
+    },
+    {
+      "id": "google/gemma-4-31b-it:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun hit upstream 429 rate limiting."
+    },
+    {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun returned truncated invalid JSON."
+    },
+    {
+      "id": "nvidia/nemotron-3-nano-30b-a3b:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun was reachable but returned empty content."
+    },
+    {
+      "id": "nvidia/nemotron-nano-9b-v2:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun was reachable but returned empty content."
+    },
+    {
+      "id": "qwen/qwen3-coder:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun hit upstream 429 rate limiting."
+    },
+    {
+      "id": "z-ai/glm-4.5-air:free",
+      "role": "qualified_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "stable_enough",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": true,
+      "notes": "Fresh qualified rerun was reachable but returned empty content."
+    },
+    {
+      "id": "openrouter/free",
+      "role": "experimental_discovery",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "ephemeral",
+      "supports_structured_output": "dynamic",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": false,
+      "canonical_eligible": false,
+      "notes": "Non-deterministic route; useful for discovery and canary checks only."
+    },
+    {
+      "id": "inclusionai/ling-2.6-flash:free",
+      "role": "excluded_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "preview_or_going_away",
+      "supports_structured_output": true,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": false,
+      "notes": "Exclude from long-term qualified ranking due to preview/churn concerns."
+    },
+    {
+      "id": "inclusionai/ling-2.6-1t:free",
+      "role": "excluded_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "preview_or_going_away",
+      "supports_structured_output": true,
+      "supports_chat_completions": true,
+      "qualified_for_ranking": false,
+      "notes": "Exclude from long-term qualified ranking due to preview/churn concerns."
+    },
+    {
+      "id": "tencent/hy3-preview:free",
+      "role": "excluded_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "preview_or_going_away",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": false,
+      "notes": "Explicitly preview; exclude from qualified ranking."
+    },
+    {
+      "id": "baidu/qianfan-ocr-fast:free",
+      "role": "excluded_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free",
+      "stability": "specialized",
+      "supports_structured_output": "verify_at_runtime",
+      "supports_chat_completions": true,
+      "qualified_for_ranking": false,
+      "notes": "Task-misaligned OCR-specialized route; keep out of qualified ranking."
+    }
+  ]
+}

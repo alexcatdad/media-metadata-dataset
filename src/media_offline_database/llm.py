@@ -59,3 +59,16 @@ def openai_compat_handshake(
             )
 
     return results
+
+
+def resolve_z_ai_api_key(
+    *,
+    api_key_id: str,
+    api_key_secret: str,
+) -> str:
+    """Return the Z.ai API key to send as a Bearer token."""
+
+    if "." in api_key_secret:
+        return api_key_secret
+
+    return f"{api_key_id}.{api_key_secret}"

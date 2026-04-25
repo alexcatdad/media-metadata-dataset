@@ -50,6 +50,38 @@ class Settings(BaseSettings):
         ),
         validation_alias="OPENAI_COMPAT_FALLBACK_MODELS",
     )
+    google_ai_studio_api_key: str | None = Field(
+        default=None,
+        validation_alias="GOOGLE_AI_STUDIO_API_KEY",
+    )
+    gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
+    google_api_key: str | None = Field(default=None, validation_alias="GOOGLE_API_KEY")
+    gemini_base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta",
+        validation_alias="GEMINI_BASE_URL",
+    )
+    gemini_benchmark_delay_seconds: float = Field(
+        default=4.0,
+        validation_alias="GEMINI_BENCHMARK_DELAY_SECONDS",
+    )
+    z_ai_api_key_id: str | None = Field(default=None, validation_alias="Z_AI_API_KEY_ID")
+    z_ai_api_key_secret: str | None = Field(
+        default=None,
+        validation_alias="Z_AI_API_KEY_SECRET",
+    )
+    z_ai_base_url: str = Field(
+        default="https://api.z.ai/api/paas/v4/",
+        validation_alias="Z_AI_BASE_URL",
+    )
+    z_ai_default_model: str = Field(
+        default="glm-4.5-flash",
+        validation_alias="Z_AI_DEFAULT_MODEL",
+    )
+    z_ai_fallback_models: str = Field(
+        default="glm-4.7-flash",
+        validation_alias="Z_AI_FALLBACK_MODELS",
+    )
+    z_ai_max_concurrency: int = Field(default=1, validation_alias="Z_AI_MAX_CONCURRENCY")
 
     def require_ai_credentials(self) -> None:
         """Validate required AI credentials without exposing their values."""
@@ -78,3 +110,26 @@ class Settings(BaseSettings):
             if model.strip()
         ]
         return [self.openai_compat_default_model, *fallback_models]
+
+    @property
+    def resolved_gemini_api_key(self) -> str | None:
+        """Return the configured Gemini API key without exposing it."""
+
+        return self.google_ai_studio_api_key or self.gemini_api_key or self.google_api_key
+
+    @property
+    def z_ai_models(self) -> list[str]:
+        """Return the default Z.ai model followed by configured fallbacks."""
+
+        fallback_models = [
+            model.strip()
+            for model in self.z_ai_fallback_models.split(",")
+            if model.strip()
+        ]
+        return [self.z_ai_default_model, *fallback_models]
+
+    @property
+    def has_z_ai_credentials(self) -> bool:
+        """Return whether the split Z.ai API key fields are present."""
+
+        return bool(self.z_ai_api_key_id and self.z_ai_api_key_secret)

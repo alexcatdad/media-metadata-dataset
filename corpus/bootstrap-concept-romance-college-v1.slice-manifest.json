@@ -1,0 +1,94 @@
+{
+  "manifest_version": 1,
+  "slice_id": "bootstrap-concept-romance-college-v1",
+  "slice_family": "concept",
+  "entity_model": "bootstrap-entity-v1",
+  "dataset": {
+    "path": "bootstrap-concept-romance-college-v1.jsonl",
+    "sha256": "19a6cd45860e14b9d2ad25d0d7fc50721ab7c4820ddbe666a17e328b3aa9a4ca",
+    "entity_count": 3,
+    "relationship_count": 0,
+    "domains": [
+      "anime"
+    ],
+    "entity_ids_in_order": [
+      "anime:local:anilist:17895",
+      "anime:local:anilist:16",
+      "anime:local:anilist:1698"
+    ],
+    "relationship_counts": {},
+    "duplicate_title_counts": []
+  },
+  "proves": [
+    "A tiny local-evidence slice can anchor a plain-language romance-plus-college concept query.",
+    "The slice keeps anime rows rich enough for genre and tag matching without a larger corpus.",
+    "Golden Time remains the strongest checked-in match for the current college-romance concept phrasing."
+  ],
+  "anchors": [
+    {
+      "entity_id": "anime:local:anilist:17895",
+      "checks": {
+        "title": "Golden Time",
+        "domain": "anime",
+        "media_type": "TV",
+        "source_role": "LOCAL_EVIDENCE",
+        "genres_include": [
+          "Romance"
+        ],
+        "tags_include": [
+          "College",
+          "Primarily Adult Cast"
+        ]
+      }
+    },
+    {
+      "entity_id": "anime:local:anilist:16",
+      "checks": {
+        "title": "Honey and Clover",
+        "domain": "anime",
+        "media_type": "TV",
+        "source_role": "LOCAL_EVIDENCE",
+        "genres_include": [
+          "Romance"
+        ],
+        "tags_include": [
+          "College",
+          "Primarily Adult Cast"
+        ]
+      }
+    }
+  ],
+  "query_contract": {
+    "query": "romance anime where characters are in university/college",
+    "limit": 5,
+    "expected_entity_ids": [
+      "anime:local:anilist:17895",
+      "anime:local:anilist:16",
+      "anime:local:anilist:1698"
+    ],
+    "expected_titles": [
+      "Golden Time",
+      "Honey and Clover",
+      "Nodame Cantabile"
+    ],
+    "expected_filters": {
+      "genres": [
+        "Romance"
+      ],
+      "tags": [
+        "College",
+        "Primarily Adult Cast"
+      ]
+    },
+    "top_match": {
+      "entity_id": "anime:local:anilist:17895",
+      "matched_genres": [
+        "Romance"
+      ],
+      "matched_tags": [
+        "College",
+        "Primarily Adult Cast"
+      ]
+    }
+  }
+}

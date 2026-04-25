@@ -15,6 +15,8 @@ COPY pyproject.toml uv.lock README.md .env.example ./
 COPY src ./src
 COPY tests ./tests
 COPY docs ./docs
+COPY corpus ./corpus
+COPY benchmarks ./benchmarks
 COPY scripts ./scripts
 
 RUN uv sync --frozen --extra dev

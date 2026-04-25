@@ -24,6 +24,7 @@ jobs:
         run: docker run --rm media-metadata-dataset:ci mod --help
 
       - name: Credential wiring smoke
+        if: ${{ env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != '' && env.OPENAI_COMPAT_API_KEY != '' }}
         run: |
           docker run --rm \
             -e CLOUDFLARE_ACCOUNT_ID \
@@ -38,19 +39,22 @@ jobs:
       - name: Pyright
         run: docker run --rm media-metadata-dataset:ci pyright
 
-      - name: Pytest
-        run: docker run --rm media-metadata-dataset:ci pytest
+      - name: Contract tests
+        run: docker run --rm media-metadata-dataset:ci ./scripts/ci/run_contract_tests.sh
 
-      - name: Generate keyless smoke artifact
+      - name: Dataset tests
+        run: docker run --rm media-metadata-dataset:ci ./scripts/ci/run_dataset_tests.sh
+
+      - name: Generate dataset smoke artifacts
         run: |
           mkdir -p .mod/out
           docker run --rm \
             -v "${{ github.workspace }}/.mod/out:/app/.mod/out" \
             media-metadata-dataset:ci \
-            mod smoke-artifact --output-dir .mod/out/keyless-smoke
+            ./scripts/ci/run_artifact_smokes.sh
 
-      - name: Upload keyless smoke artifact
+      - name: Upload smoke artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: keyless-smoke-artifact
-          path: .mod/out/keyless-smoke
+          name: dataset-smoke-artifacts
+          path: .mod/out

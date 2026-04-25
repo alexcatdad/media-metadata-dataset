@@ -1,0 +1,100 @@
+{
+  "manifest_version": 1,
+  "slice_id": "bootstrap-screen-v1",
+  "slice_family": "challenge",
+  "entity_model": "bootstrap-entity-v1",
+  "dataset": {
+    "path": "bootstrap-screen-v1.jsonl",
+    "sha256": "db630a4aa80918abbd88541c81cd97e0b4a7ddd7c364f67296dff32d2f8be0bb",
+    "entity_count": 18,
+    "relationship_count": 21,
+    "domains": [
+      "anime",
+      "tv"
+    ],
+    "entity_ids_in_order": [
+      "anime:manami:anidb:23",
+      "anime:manami:anidb:219",
+      "anime:manami:anilist:4037",
+      "tv:tvmaze:116",
+      "anime:manami:anidb:12681",
+      "anime:manami:anilist:101343",
+      "anime:manami:anilist:101344",
+      "anime:manami:anidb:13612",
+      "anime:manami:anidb:15359",
+      "anime:manami:anilist:121",
+      "anime:manami:anilist:5114",
+      "anime:manami:anilist:270",
+      "anime:manami:anilist:777",
+      "anime:manami:anilist:5760",
+      "anime:manami:anilist:101347",
+      "anime:manami:anilist:21560",
+      "anime:manami:anilist:97643",
+      "anime:local:anilist:156039"
+    ],
+    "relationship_counts": {
+      "movie_related": 6,
+      "remake_reboot": 6,
+      "sequel_prequel": 7,
+      "special_related": 2
+    },
+    "duplicate_title_counts": [
+      {
+        "title": "Dororo",
+        "count": 2
+      }
+    ]
+  },
+  "proves": [
+    "A tiny checked-in bootstrap slice can mix anime and TV entries without collapsing domains.",
+    "Family edges for movies, specials, sequels, and remakes stay distinct inside one regression corpus.",
+    "False-friend titles can remain explicit local evidence instead of being merged into the wrong franchise."
+  ],
+  "anchors": [
+    {
+      "entity_id": "tv:tvmaze:116",
+      "checks": {
+        "title": "The Mentalist",
+        "domain": "tv",
+        "media_type": "TV",
+        "source_role": "BACKBONE_SOURCE",
+        "episodes": 151
+      }
+    },
+    {
+      "entity_id": "anime:manami:anidb:12681",
+      "checks": {
+        "title": "Made in Abyss",
+        "domain": "anime",
+        "media_type": "TV",
+        "source_role": "BACKBONE_SOURCE",
+        "relationship_types": [
+          "movie_related",
+          "sequel_prequel"
+        ],
+        "related_targets": [
+          "anime:manami:anilist:101343",
+          "anime:manami:anilist:101344",
+          "anime:manami:anidb:13612"
+        ],
+        "tags_include": [
+          "adventure",
+          "dark fantasy"
+        ]
+      }
+    },
+    {
+      "entity_id": "anime:local:anilist:156039",
+      "checks": {
+        "title": "Berserk of Gluttony",
+        "domain": "anime",
+        "media_type": "TV",
+        "source_role": "LOCAL_EVIDENCE",
+        "tags_include": [
+          "false-friend-title",
+          "unrelated-franchise"
+        ]
+      }
+    }
+  ]
+}

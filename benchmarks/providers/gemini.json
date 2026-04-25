@@ -1,0 +1,218 @@
+{
+  "id": "gemini",
+  "name": "Gemini API / Google AI Studio",
+  "status": "planned",
+  "canonical_eligible": false,
+  "docs": {
+    "pricing": "https://ai.google.dev/gemini-api/docs/pricing",
+    "text_generation": "https://ai.google.dev/gemini-api/docs/text-generation",
+    "structured_output": "https://ai.google.dev/gemini-api/docs/structured-output",
+    "embeddings": "https://ai.google.dev/gemini-api/docs/embeddings",
+    "terms": "https://ai.google.dev/gemini-api/terms"
+  },
+  "auth": {
+    "scheme": "api_key_header",
+    "env": "GOOGLE_AI_STUDIO_API_KEY",
+    "header": "x-goog-api-key",
+    "format": "${GOOGLE_AI_STUDIO_API_KEY}",
+    "notes": "Use the documented Gemini API key directly. Do not use JWT, OAuth, or OpenAI-compatible assumptions for this benchmark lane."
+  },
+  "base_url": "https://generativelanguage.googleapis.com/v1beta",
+  "tasks": ["chat_json_judgment", "embedding_similarity"],
+  "limits": {
+    "max_concurrency": 1,
+    "requests_per_minute": null,
+    "requests_per_day": null,
+    "per_run_request_budget": 8
+  },
+  "data_use": {
+    "free_tier_content_used_to_improve_products": true,
+    "notes": "Gemini API pricing page says free-tier content is used to improve Google products. Treat free-tier results as benchmark evidence unless a later policy decision allows source-safe canonical usage."
+  },
+  "models": [
+    {
+      "id": "gemini-3.1-flash-lite-preview",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct JSON result in the fresh qualified rerun with the fixed payload recipe, at 11567 ms."
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct JSON result in the fresh qualified rerun with the fixed payload recipe, at 13698 ms."
+    },
+    {
+      "id": "gemini-2.5-pro",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "First direct benchmark returned free-tier quota 0 for this key/account."
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Still failed the fresh qualified rerun with the fixed payload recipe by truncating the JSON output."
+    },
+    {
+      "id": "gemini-2.5-flash-lite",
+      "role": "primary_benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct JSON result in the fresh qualified rerun at 1210 ms, best Gemini judgment candidate so far."
+    },
+    {
+      "id": "gemini-2.5-flash-lite-preview-09-2025",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": "unknown",
+      "supports_generate_content": false,
+      "qualified_for_ranking": false,
+      "notes": "Pricing page lists it, but v1beta generateContent returned NOT_FOUND in the first direct benchmark."
+    },
+    {
+      "id": "gemma-3-1b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": false,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Direct model listing exposes this id, but Gemini JSON mode is not enabled for it."
+    },
+    {
+      "id": "gemma-3-4b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": false,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Direct model listing exposes this id, but Gemini JSON mode is not enabled for it."
+    },
+    {
+      "id": "gemma-3-12b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": false,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Direct model listing exposes this id, but Gemini JSON mode is not enabled for it."
+    },
+    {
+      "id": "gemma-3-27b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": false,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Direct model listing exposes this id, but Gemini JSON mode is not enabled for it."
+    },
+    {
+      "id": "gemma-3n-e4b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": false,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Direct model listing exposes this id, but Gemini JSON mode is not enabled for it."
+    },
+    {
+      "id": "gemma-3n-e2b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": false,
+      "supports_generate_content": true,
+      "qualified_for_ranking": false,
+      "notes": "Direct model listing exposes this id, but Gemini JSON mode is not enabled for it."
+    },
+    {
+      "id": "gemma-4-26b-a4b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct valid JSON in the direct Gemini Gemma rerun at 2387 ms."
+    },
+    {
+      "id": "gemma-4-31b-it",
+      "role": "benchmark_candidate",
+      "task": "chat_json_judgment",
+      "free_tier": "free_of_charge",
+      "supports_structured_output": true,
+      "supports_generate_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Correct valid JSON in the direct Gemini Gemma rerun at 3089 ms."
+    },
+    {
+      "id": "gemini-embedding-001",
+      "role": "embedding_candidate",
+      "task": "embedding_similarity",
+      "free_tier": "free_of_charge",
+      "supports_embed_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Initial latency baseline returned one 3072-d vector in 485 ms."
+    },
+    {
+      "id": "gemini-embedding-2",
+      "role": "embedding_candidate",
+      "task": "embedding_similarity",
+      "free_tier": "free_of_charge",
+      "supports_embed_content": true,
+      "qualified_for_ranking": true,
+      "notes": "Initial latency baseline returned one 3072-d vector in 323 ms."
+    }
+  ],
+  "excluded_initial_models": [
+    {
+      "id": "gemini-2.0-flash",
+      "reason": "Deprecated and scheduled for shutdown on 2026-06-01."
+    },
+    {
+      "id": "gemini-2.0-flash-lite",
+      "reason": "Deprecated and scheduled for shutdown on 2026-06-01."
+    },
+    {
+      "id": "gemini-3.1-flash-live-preview",
+      "reason": "Live/audio task shape, not initial chat JSON benchmark."
+    },
+    {
+      "id": "gemini-3.1-flash-tts-preview",
+      "reason": "TTS task shape, not initial chat JSON benchmark."
+    },
+    {
+      "id": "gemini-robotics-er-1.6-preview",
+      "reason": "Robotics task shape, not initial media metadata benchmark."
+    },
+    {
+      "id": "gemini-robotics-er-1.5-preview",
+      "reason": "Robotics task shape, not initial media metadata benchmark."
+    }
+  ]
+}

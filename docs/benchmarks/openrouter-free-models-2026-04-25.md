@@ -1,5 +1,8 @@
 # OpenRouter Free Model Benchmark, 2026-04-25
 
+This document is exploratory and superseded by the contract-qualified benchmark policy. It records
+the first broad free-model sweep, not the current ranking allowlist.
+
 Benchmark input used a Manami `2026-14` release case:
 
 - record A: `Cowboy Bebop`, TV, 1998, 26 episodes

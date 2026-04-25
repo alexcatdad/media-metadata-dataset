@@ -7,6 +7,24 @@ from typing import Any
 
 import polars as pl
 
+from media_offline_database import __version__
+
+ARTIFACT_MANIFEST_SCHEMA = "media-offline-dataset.artifact-manifest"
+ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
+ARTIFACT_VERSION = 1
+
+
+def artifact_manifest_metadata(*, artifact: str, build_stage: str) -> dict[str, Any]:
+    return {
+        "artifact": artifact,
+        "artifact_version": ARTIFACT_VERSION,
+        "build_stage": build_stage,
+        "created_at": datetime.now(UTC).isoformat(),
+        "generator_version": __version__,
+        "manifest_schema": ARTIFACT_MANIFEST_SCHEMA,
+        "manifest_schema_version": ARTIFACT_MANIFEST_SCHEMA_VERSION,
+    }
+
 
 def write_keyless_smoke_artifact(output_dir: Path) -> Path:
     """Write a tiny dataset artifact without network access or credentials."""
@@ -26,8 +44,10 @@ def write_keyless_smoke_artifact(output_dir: Path) -> Path:
     frame.write_parquet(dataset_path, compression="zstd")
 
     manifest: dict[str, Any] = {
-        "artifact": "keyless-smoke",
-        "created_at": datetime.now(UTC).isoformat(),
+        **artifact_manifest_metadata(
+            artifact="keyless-smoke",
+            build_stage="keyless-smoke",
+        ),
         "row_count": frame.height,
         "files": [
             {

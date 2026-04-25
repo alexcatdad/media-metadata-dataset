@@ -1,0 +1,69 @@
+{
+  "manifest_version": 1,
+  "slice_id": "bootstrap-death-note-v1",
+  "slice_family": "challenge",
+  "entity_model": "bootstrap-entity-v1",
+  "dataset": {
+    "path": "bootstrap-death-note-v1.jsonl",
+    "sha256": "98cfb4af63df1c910a92256f4ebb9db007be54d056a9e6ddb7105447e191a256",
+    "entity_count": 4,
+    "relationship_count": 12,
+    "domains": [
+      "anime",
+      "movie",
+      "tv"
+    ],
+    "entity_ids_in_order": [
+      "anime:manami:anidb:4563",
+      "movie:tmdb:16007",
+      "tv:tvmaze:4712",
+      "movie:tmdb:351460"
+    ],
+    "relationship_counts": {
+      "adaptation_related": 12
+    },
+    "duplicate_title_counts": [
+      {
+        "title": "Death Note",
+        "count": 4
+      }
+    ]
+  },
+  "proves": [
+    "Same-title anime, TV, and movie adaptations stay as separate entities instead of collapsing into one row.",
+    "Cross-media adaptation edges survive as the dominant relationship contract for the slice.",
+    "The slice keeps both Japanese and US live-action interpretations attached to the same anime anchor."
+  ],
+  "anchors": [
+    {
+      "entity_id": "anime:manami:anidb:4563",
+      "checks": {
+        "title": "Death Note",
+        "domain": "anime",
+        "media_type": "TV",
+        "source_role": "BACKBONE_SOURCE",
+        "relationship_types": [
+          "adaptation_related"
+        ],
+        "related_targets": [
+          "movie:tmdb:16007",
+          "tv:tvmaze:4712",
+          "movie:tmdb:351460"
+        ]
+      }
+    },
+    {
+      "entity_id": "movie:tmdb:351460",
+      "checks": {
+        "title": "Death Note",
+        "domain": "movie",
+        "media_type": "MOVIE",
+        "source_role": "BACKBONE_SOURCE",
+        "tags_include": [
+          "live action",
+          "united states"
+        ]
+      }
+    }
+  ]
+}

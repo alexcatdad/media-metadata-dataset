@@ -17,6 +17,10 @@ def test_env_example_contains_keyless_ci_budget_knobs() -> None:
         "OPENAI_COMPAT_DEFAULT_MODEL",
         "OPENAI_COMPAT_FALLBACK_MODELS",
         "OPENROUTER_EMBEDDING_REQUESTS_PER_DAY",
+        "GOOGLE_AI_STUDIO_API_KEY",
+        "Z_AI_API_KEY_ID",
+        "Z_AI_API_KEY_SECRET",
+        "Z_AI_MAX_CONCURRENCY",
     }
 
     for key in required_keys:
@@ -49,11 +53,15 @@ def test_readme_links_point_to_existing_repo_files() -> None:
 
 def test_source_policy_roles_match_source_role_enum() -> None:
     policy_text = Path("docs/source-admissibility-and-rate-limits.md").read_text(encoding="utf-8")
-    documented_roles = set(re.findall(r"`([A-Z_]+)`", policy_text))
+    roles_section = policy_text.split("## Source Roles", maxsplit=1)[1].split(
+        "## Free-Access Reproducibility",
+        maxsplit=1,
+    )[0]
+    documented_roles = set(re.findall(r"`([A-Z_]+)`", roles_section))
     enum_roles = {role.value for role in SourceRole}
 
     assert enum_roles <= documented_roles
-    assert documented_roles <= enum_roles | {"ETag", "Last-Modified", "Retry-After"}
+    assert documented_roles <= enum_roles
 
 
 def test_backbone_sources_have_evidence_links() -> None:

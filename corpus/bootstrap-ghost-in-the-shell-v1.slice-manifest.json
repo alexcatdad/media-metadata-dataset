@@ -1,0 +1,74 @@
+{
+  "manifest_version": 1,
+  "slice_id": "bootstrap-ghost-in-the-shell-v1",
+  "slice_family": "challenge",
+  "entity_model": "bootstrap-entity-v1",
+  "dataset": {
+    "path": "bootstrap-ghost-in-the-shell-v1.jsonl",
+    "sha256": "8fe84008359e0fadfe4cb3c18940555f790df1ec3f46b70a31204467eaa9be6a",
+    "entity_count": 5,
+    "relationship_count": 10,
+    "domains": [
+      "anime",
+      "movie"
+    ],
+    "entity_ids_in_order": [
+      "anime:manami:anidb:61",
+      "anime:manami:anidb:890",
+      "anime:manami:anidb:247",
+      "anime:manami:anidb:1176",
+      "movie:tmdb:315837"
+    ],
+    "relationship_counts": {
+      "franchise_related": 6,
+      "sequel_prequel": 4
+    },
+    "duplicate_title_counts": [
+      {
+        "title": "Ghost in the Shell",
+        "count": 2
+      }
+    ]
+  },
+  "proves": [
+    "A title family can span anime film, anime TV, and live-action movie entries in one slice.",
+    "Franchise links and sequel/prequel links stay separate even when names are nearly identical.",
+    "The live-action film remains a distinct franchise neighbor instead of replacing the animated canon."
+  ],
+  "anchors": [
+    {
+      "entity_id": "anime:manami:anidb:61",
+      "checks": {
+        "title": "Ghost in the Shell",
+        "domain": "anime",
+        "media_type": "MOVIE",
+        "source_role": "BACKBONE_SOURCE",
+        "relationship_types": [
+          "franchise_related",
+          "sequel_prequel"
+        ],
+        "related_targets": [
+          "anime:manami:anidb:890",
+          "anime:manami:anidb:247",
+          "movie:tmdb:315837"
+        ]
+      }
+    },
+    {
+      "entity_id": "movie:tmdb:315837",
+      "checks": {
+        "title": "Ghost in the Shell",
+        "domain": "movie",
+        "media_type": "MOVIE",
+        "source_role": "BACKBONE_SOURCE",
+        "relationship_types": [
+          "franchise_related"
+        ],
+        "tags_include": [
+          "live action",
+          "cyberpunk"
+        ]
+      }
+    }
+  ]
+}
