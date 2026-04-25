@@ -15,7 +15,7 @@ jobs:
       OPENAI_COMPAT_API_KEY: ${{ secrets.OPENAI_COMPAT_API_KEY }}
     steps:
       - name: Check out repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Build image
         run: docker build -t media-metadata-dataset:ci .
@@ -54,7 +54,7 @@ jobs:
             ./scripts/ci/run_artifact_smokes.sh
 
       - name: Upload smoke artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: dataset-smoke-artifacts
           path: .mod/out
