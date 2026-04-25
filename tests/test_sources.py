@@ -9,5 +9,6 @@ def test_source_roles_are_stable() -> None:
         "ID_SOURCE",
         "LOCAL_EVIDENCE",
         "RUNTIME_ONLY",
+        "PAID_EXPERIMENT_ONLY",
         "BLOCKED",
     ]

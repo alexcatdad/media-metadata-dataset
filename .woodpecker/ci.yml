@@ -26,3 +26,12 @@ steps:
       - docker run --rm media-metadata-dataset:ci pytest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  keyless-smoke-artifact:
+    image: docker:29-cli
+    commands:
+      - mkdir -p .mod/out
+      - docker run --rm -v "$PWD/.mod/out:/app/.mod/out" media-metadata-dataset:ci mod smoke-artifact --output-dir .mod/out/keyless-smoke
+      - ls -la .mod/out/keyless-smoke
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

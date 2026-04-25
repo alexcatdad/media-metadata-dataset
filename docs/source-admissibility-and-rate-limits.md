@@ -12,7 +12,21 @@ published dataset.
 - `ID_SOURCE`: can contribute stable URLs, IDs, and cross-reference evidence.
 - `LOCAL_EVIDENCE`: can help local matching or QA, but raw data is not published.
 - `RUNTIME_ONLY`: consumers should fetch it themselves under their own credentials.
+- `PAID_EXPERIMENT_ONLY`: paid or contract access can be used for private experiments only and must
+  not shape public artifacts without a later accepted decision documenting redistribution rights.
 - `BLOCKED`: do not integrate without direct permission or a better license path.
+
+## Free-Access Reproducibility
+
+Canonical published pipelines should prefer open bulk downloads, public free tiers, and free/open
+model inference. This is not only a cost preference. It is part of the legal and community posture:
+ordinary contributors should be able to reproduce the pipeline without hidden commercial contracts,
+and public artifacts should not look like privileged derivative databases built from paid access.
+
+Free access does not automatically grant redistribution rights. Provider role and field policy still
+control what can be published. Paid or contract access is allowed for private experiments and
+non-published local evidence only unless a later decision log entry records rights evidence and
+explicitly approves its use in canonical artifacts.
 
 ## Execution Boundary
 
@@ -42,6 +56,7 @@ All network access must go through a provider-aware HTTP client. Provider adapte
 The client enforces:
 
 - per-provider token buckets from config;
+- per-provider free-tier budget ledgers where applicable;
 - daily/weekly run guards for bulk dumps and release assets;
 - persistent request cache keyed by provider, URL, request body hash, and auth-free request shape;
 - `ETag`, `Last-Modified`, and conditional request headers where providers support them;
@@ -49,6 +64,7 @@ The client enforces:
 - hard stop on daily budgets instead of retry storms;
 - max concurrency per provider, defaulting to `1` unless explicitly raised;
 - distinct local-only caches for sources that cannot be republished;
+- strict separation between free-access canonical caches and paid/privileged experiment caches;
 - audit rows for every remote fetch: provider, URL, status, cache hit, request hash, response hash,
   started_at, finished_at, and rate-limit bucket.
 
@@ -80,6 +96,22 @@ must run inside Docker and obey provider caps.
 | Trakt | `LOCAL_EVIDENCE` / `RUNTIME_ONLY` | IDs/social/trending evidence only | Official fixed public cap was not confirmed; enforce conservative cap and `429` handling | 60 req/min | [API docs](https://trakt.docs.apiary.io/) |
 | OMDb | `LOCAL_EVIDENCE` / `RUNTIME_ONLY` | IMDb-keyed lookup only; no copied index | Free key page lists 1,000 daily limit | 1,000 req/day | [API key page](https://www.omdbapi.com/apikey.aspx), [legal](https://www.omdbapi.com/legal.htm) |
 | JustWatch | `RUNTIME_ONLY` | Availability/offers only at runtime or with partner agreement | Partner token required; branded links/attribution; no public scrape path | 60 req/min | [partner API](https://apis.justwatch.com/docs/api/), [terms](https://support.justwatch.com/hc/en-us/articles/9567105189405-JustWatch-s-Terms-of-Use) |
+
+## Model Inference Policy
+
+LLM and embedding providers are also source-like dependencies. Canonical runs should use free/open
+routes first, with caches and hard budgets so repeated scheduled runs do not spam free providers.
+
+Preferred embedding routes:
+
+1. Cloudflare Workers AI free allocation for canonical cloud embeddings using `@cf/baai/bge-m3`.
+2. Jina AI free tier as a benchmark/fallback route.
+3. Hugging Face Inference Providers free credits as experiment/fallback.
+4. OpenRouter embeddings only after confirming a stable free/cheap embedding model route.
+
+Any paid inference use is `PAID_EXPERIMENT_ONLY` unless approved by a later decision.
+
+See `docs/model-selection.md` for the current model choices.
 
 ## CLI State On This Machine
 

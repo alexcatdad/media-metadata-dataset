@@ -43,7 +43,11 @@ docker compose run --rm app mod --help
 docker compose run --rm app ruff check .
 docker compose run --rm app pyright
 docker compose run --rm app pytest
+docker compose run --rm app mod smoke-artifact
 ```
+
+CI runs a keyless precursor before any provider credentials are needed: image build, CLI smoke,
+Ruff, Pyright, pytest policy/data/model tests, and tiny Parquet artifact generation.
 
 ## Source Policy
 
@@ -54,9 +58,15 @@ of:
 - `ID_SOURCE`
 - `LOCAL_EVIDENCE`
 - `RUNTIME_ONLY`
+- `PAID_EXPERIMENT_ONLY`
 - `BLOCKED`
 
 See [`docs/source-admissibility-and-rate-limits.md`](docs/source-admissibility-and-rate-limits.md).
+See [`docs/model-selection.md`](docs/model-selection.md) for current free-access model choices.
+
+Canonical published runs should prefer open bulk downloads, public free tiers, and free/open model
+inference. Paid or contract access is private experiment-only unless a decision log entry records
+rights evidence and approves publication use.
 
 ## Local Configuration
 

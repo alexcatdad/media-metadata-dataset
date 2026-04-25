@@ -8,11 +8,16 @@ def test_decision_log_is_valid_jsonl() -> None:
     decision_log = Path("docs/decisions.jsonl")
 
     ids: set[str] = set()
+    numeric_ids: list[int] = []
     for line_number, line in enumerate(decision_log.read_text(encoding="utf-8").splitlines(), 1):
         record = json.loads(line)
         assert record["id"] not in ids, f"duplicate decision id on line {line_number}"
+        assert record["id"].startswith("D-")
         assert record["status"] in {"accepted", "superseded", "rejected"}
         assert record["date"]
         assert record["title"]
         assert record["decision"]
         ids.add(record["id"])
+        numeric_ids.append(int(record["id"].removeprefix("D-")))
+
+    assert numeric_ids == sorted(numeric_ids)

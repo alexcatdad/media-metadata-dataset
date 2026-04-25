@@ -16,6 +16,9 @@ jobs:
       - name: Build image
         run: docker build -t media-metadata-dataset:ci .
 
+      - name: CLI smoke
+        run: docker run --rm media-metadata-dataset:ci mod --help
+
       - name: Ruff
         run: docker run --rm media-metadata-dataset:ci ruff check .
 
@@ -24,3 +27,17 @@ jobs:
 
       - name: Pytest
         run: docker run --rm media-metadata-dataset:ci pytest
+
+      - name: Generate keyless smoke artifact
+        run: |
+          mkdir -p .mod/out
+          docker run --rm \
+            -v "${{ github.workspace }}/.mod/out:/app/.mod/out" \
+            media-metadata-dataset:ci \
+            mod smoke-artifact --output-dir .mod/out/keyless-smoke
+
+      - name: Upload keyless smoke artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyless-smoke-artifact
+          path: .mod/out/keyless-smoke
