@@ -111,6 +111,41 @@ def test_snapshot_compatibility_reports_profile_derived_and_experimental(
     ]
 
 
+def test_snapshot_compatibility_classifies_underscore_llm_kinds_as_derived(
+    tmp_path: Path,
+) -> None:
+    previous = _write_manifest(
+        tmp_path / "previous.json",
+        [
+            {
+                "path": "llm-materialized-relationships.parquet",
+                "kind": "llm_materialized_relationships",
+                "recipe_version": "recipe-v1",
+            },
+        ],
+    )
+    current = _write_manifest(
+        tmp_path / "current.json",
+        [
+            {
+                "path": "llm-materialized-relationships.parquet",
+                "kind": "llm_materialized_relationships",
+                "recipe_version": "recipe-v2",
+            },
+        ],
+    )
+
+    report = validate_snapshot_compatibility(
+        previous_manifest_path=previous,
+        current_manifest_path=current,
+    )
+
+    assert report.compatible
+    assert len(report.findings) == 1
+    assert report.findings[0].tier == "derived"
+    assert report.findings[0].code == "recipe_version_changed"
+
+
 def test_validate_snapshot_compatibility_cli_exits_nonzero_on_core_break(
     tmp_path: Path,
 ) -> None:

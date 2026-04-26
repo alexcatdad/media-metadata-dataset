@@ -183,7 +183,8 @@ The dataset continuity layer should live with the published dataset, not inside 
 - Hugging Face dataset commits are physical snapshots of the published Parquet artifacts plus
   manifest.
 - `main` is the moving latest pointer; supported releases should be tagged.
-- Exact consumers should pin a full Hugging Face commit SHA recorded in the manifest.
+- Exact consumers should pin the full Hugging Face commit SHA returned by publication tooling or
+  the supported release tag.
 - Each refresh job records progress by source snapshot plus stable batch offsets.
 - Partial checkpoint uploads are allowed; the next run resumes from the last persisted offset for
   that snapshot.

@@ -29,9 +29,10 @@ docker compose run --rm app mod hf-publish /path/to/manifest.json \
   --release-tag v0.1.0
 ```
 
-The local manifest is updated with `huggingface.repo_id`, `huggingface.commit_sha`, and
-`huggingface.revision`. Consumers that need exact reproducibility should pin the full commit SHA.
-Consumers that need a supported release line may pin the release tag.
+The command result includes `commit_sha`, the final Hugging Face commit to pin for exact
+reproducibility, and `bundle_commit_sha`, the commit that uploaded the artifact bundle. Consumers
+that need a supported release line may pin the release tag. The manifest is not rewritten to include
+the SHA of the commit that contains itself.
 
 ## Run A Checkpointed Refresh
 

@@ -8,13 +8,13 @@ from media_offline_database.hf_publish import (
     build_publish_bundle,
     publish_checkpoint_bundle,
     resolve_hf_repo_id,
-    validate_manifest_hf_revision,
 )
 from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
-COMMIT_SHA = "1234567890abcdef1234567890abcdef12345678"
+BUNDLE_COMMIT_SHA = "1234567890abcdef1234567890abcdef12345678"
+FINAL_COMMIT_SHA = "abcdef1234567890abcdef1234567890abcdef12"
 
 
 class FakeCommitInfo:
@@ -83,7 +83,10 @@ class FakeHfApi:
                 "ignore_patterns": ignore_patterns,
             }
         )
-        return FakeCommitInfo(f"https://huggingface.co/commit/{COMMIT_SHA}", COMMIT_SHA)
+        return FakeCommitInfo(
+            f"https://huggingface.co/commit/{BUNDLE_COMMIT_SHA}",
+            BUNDLE_COMMIT_SHA,
+        )
 
     def upload_file(
         self,
@@ -105,7 +108,10 @@ class FakeHfApi:
                 "commit_message": commit_message,
             }
         )
-        return FakeCommitInfo()
+        return FakeCommitInfo(
+            f"https://huggingface.co/commit/{FINAL_COMMIT_SHA}",
+            FINAL_COMMIT_SHA,
+        )
 
     def create_tag(
         self,
@@ -249,22 +255,16 @@ def test_publish_checkpoint_bundle_uploads_artifact_and_state(tmp_path: Path) ->
     ]
     assert [entry["path_in_repo"] for entry in fake_api.uploaded_files] == [
         "README.md",
-        "checkpoints/anime.manami.default/2026-14/00000000-00000100/sample-manifest.json",
         HF_REFRESH_STATE_PATH,
     ]
     assert result.repo_id == "alecatdad/media-metadata-dataset-test"
     assert result.state_path == HF_REFRESH_STATE_PATH
-    assert result.commit_sha == COMMIT_SHA
-    assert result.commit_url == f"https://huggingface.co/commit/{COMMIT_SHA}"
+    assert result.bundle_commit_sha == BUNDLE_COMMIT_SHA
+    assert result.commit_sha == FINAL_COMMIT_SHA
+    assert result.commit_url == f"https://huggingface.co/commit/{FINAL_COMMIT_SHA}"
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest["huggingface"] == {
-        "commit_sha": COMMIT_SHA,
-        "repo_id": "alecatdad/media-metadata-dataset-test",
-        "revision": COMMIT_SHA,
-        "revision_tag": None,
-    }
-    validate_manifest_hf_revision(manifest_path)
+    assert "huggingface" not in manifest
 
 
 def test_publish_checkpoint_bundle_can_create_release_tag(tmp_path: Path) -> None:
@@ -287,20 +287,9 @@ def test_publish_checkpoint_bundle_can_create_release_tag(tmp_path: Path) -> Non
         {
             "repo_id": "alecatdad/media-metadata-dataset-test",
             "tag": "v0.1.0",
-            "revision": COMMIT_SHA,
+            "revision": FINAL_COMMIT_SHA,
             "tag_message": "Release snapshot v0.1.0",
             "token": "hf_test",
             "repo_type": "dataset",
         }
     ]
-
-
-def test_validate_manifest_hf_revision_rejects_missing_commit_sha(tmp_path: Path) -> None:
-    manifest_path = _write_manifest_bundle(tmp_path)
-
-    try:
-        validate_manifest_hf_revision(manifest_path)
-    except ValueError as error:
-        assert "huggingface revision metadata" in str(error)
-    else:
-        raise AssertionError("expected missing HF revision metadata to fail validation")
