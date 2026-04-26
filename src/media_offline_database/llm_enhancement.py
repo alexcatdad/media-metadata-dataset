@@ -237,8 +237,10 @@ def select_llm_relationship_candidates(
 
         source_entity_id = str(relationship_row["source_entity_id"])
         target_entity_id = str(relationship_row["target_entity_id"])
-        source_row = entity_rows[source_entity_id]
-        target_row = entity_rows[target_entity_id]
+        source_row = entity_rows.get(source_entity_id)
+        target_row = entity_rows.get(target_entity_id)
+        if source_row is None or target_row is None:
+            continue
         if not (
             _row_allows_private_llm_judgment_input(source_row)
             and _row_allows_private_llm_judgment_input(target_row)

@@ -64,34 +64,37 @@ def _write_manifest(
     relationship: str,
     relationship_confidence_score: float,
     source_role: str = "BACKBONE_SOURCE",
+    include_target_entity: bool = True,
 ) -> Path:
     base_dir.mkdir(parents=True, exist_ok=True)
     entities_path = base_dir / f"{stem}-entities.parquet"
     relationships_path = base_dir / f"{stem}-relationships.parquet"
     manifest_path = base_dir / f"{stem}-manifest.json"
 
-    pl.DataFrame(
-        [
-            {
-                "entity_id": "anime:one",
-                "domain": "anime",
-                "canonical_source": "https://example.com/anime/one",
-                "source_role": source_role,
-                "record_source": "fixture",
-                "title": "Made in Abyss",
-                "original_title": "メイドインアビス",
-                "media_type": "TV",
-                "status": "FINISHED",
-                "release_year": 2017,
-                "episodes": 13,
-                "synonyms": [],
-                "sources": ["https://example.com/anime/one"],
-                "genres": ["Adventure", "Drama"],
-                "studios": ["Kinema Citrus"],
-                "creators": ["Akihito Tsukushi"],
-                "tags": ["Adventure"],
-                "field_sources_json": "{}",
-            },
+    entity_rows: list[dict[str, object]] = [
+        {
+            "entity_id": "anime:one",
+            "domain": "anime",
+            "canonical_source": "https://example.com/anime/one",
+            "source_role": source_role,
+            "record_source": "fixture",
+            "title": "Made in Abyss",
+            "original_title": "メイドインアビス",
+            "media_type": "TV",
+            "status": "FINISHED",
+            "release_year": 2017,
+            "episodes": 13,
+            "synonyms": [],
+            "sources": ["https://example.com/anime/one"],
+            "genres": ["Adventure", "Drama"],
+            "studios": ["Kinema Citrus"],
+            "creators": ["Akihito Tsukushi"],
+            "tags": ["Adventure"],
+            "field_sources_json": "{}",
+        },
+    ]
+    if include_target_entity:
+        entity_rows.append(
             {
                 "entity_id": "anime:two",
                 "domain": "anime",
@@ -111,9 +114,10 @@ def _write_manifest(
                 "creators": ["Akihito Tsukushi"],
                 "tags": ["Adventure"],
                 "field_sources_json": "{}",
-            },
-        ]
-    ).write_parquet(entities_path)
+            }
+        )
+
+    pl.DataFrame(entity_rows).write_parquet(entities_path)
 
     pl.DataFrame(
         [
@@ -189,6 +193,22 @@ def test_select_llm_relationship_candidates_skips_private_only_inputs(tmp_path: 
         relationship="related_anime",
         relationship_confidence_score=0.42,
         source_role="LOCAL_EVIDENCE",
+    )
+
+    candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
+
+    assert candidates == []
+
+
+def test_select_llm_relationship_candidates_skips_missing_manifest_endpoints(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_manifest(
+        tmp_path / "current",
+        stem="current",
+        relationship="related_anime",
+        relationship_confidence_score=0.42,
+        include_target_entity=False,
     )
 
     candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
