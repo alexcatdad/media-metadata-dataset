@@ -150,6 +150,30 @@ Books and source material can be represented as relationship evidence in v1. The
 a full browse domain until a later accepted decision promotes books and defines a meaningful source
 path, profile surface, provider review, and progressive enhancement plan.
 
+## Schema Compatibility Tiers
+
+The shared core schema is the stable public contract across snapshots within a major dataset
+version. It should remain backward-compatible so downstream consumers can build one interface across
+anime, TV, and movies.
+
+Within a major version, shared core changes should be additive and safe to ignore. Do not remove
+core fields, change core field meanings, or change core field types in a breaking way. New core
+fields should be nullable or defaultable. Breaking shared-core changes require a new major schema or
+dataset version and a manifest compatibility notice.
+
+Domain profiles and extended surfaces can evolve faster than the shared core, but they must not
+break silently. Each profile or extension should declare its own schema or recipe version in the
+manifest. Breaking profile changes are allowed when explicitly versioned and documented, and
+consumers should be able to ignore unknown profile fields or skip unsupported profile versions.
+
+Compatibility tiers:
+
+- `core`: stable and backward-compatible within a major version.
+- `profile`: independently versioned per domain; additive changes preferred, breaking changes
+  allowed with explicit version bumps and manifest notices.
+- `derived`: recipe-versioned and recomputable; breaking changes allowed with manifest notices.
+- `experimental`: no compatibility guarantee; must be clearly marked as experimental or unstable.
+
 ## Tags, Facets, And Judgments
 
 The dataset should keep source tags, normalized facets, and inferred judgments separate.
