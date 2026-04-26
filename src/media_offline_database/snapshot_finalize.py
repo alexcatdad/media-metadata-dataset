@@ -10,6 +10,8 @@ from media_offline_database.hf_publish import (
     HF_REFRESH_STATE_PATH,
     HfApiLike,
     build_publish_bundle,
+    create_release_tag,
+    extract_hf_commit_sha,
     write_hf_dataset_card,
 )
 from media_offline_database.refresh_state import RefreshState, record_refresh_finalization
@@ -24,7 +26,10 @@ class SnapshotFinalizeResult(BaseModel):
     current_path: str
     current_manifest_path: str
     state_path: str | None = None
+    commit_sha: str | None = None
+    bundle_commit_sha: str | None = None
     commit_url: str | None = None
+    release_tag: str | None = None
 
 
 def _copy_bundle_to_path(*, manifest_path: Path, destination_dir: Path) -> Path:
@@ -34,7 +39,9 @@ def _copy_bundle_to_path(*, manifest_path: Path, destination_dir: Path) -> Path:
         source_path = bundle.local_dir / pattern
         if not source_path.exists():
             raise FileNotFoundError(f"bundle path missing for finalize copy: {source_path}")
-        shutil.copy2(source_path, destination_dir / Path(pattern).name)
+        destination_path = destination_dir / pattern
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination_path)
     return destination_dir / manifest_path.name
 
 
@@ -80,6 +87,7 @@ def publish_current_snapshot(
     write_dataset_card: bool = True,
     snapshot_prefix: str = "snapshots",
     current_prefix: str = "current",
+    release_tag: str | None = None,
 ) -> SnapshotFinalizeResult:
     api.create_repo(
         repo_id,
@@ -121,6 +129,7 @@ def publish_current_snapshot(
         repo_type="dataset",
         allow_patterns=bundle.allow_patterns,
     )
+    current_commit_sha = extract_hf_commit_sha(current_commit)
 
     record_refresh_finalization(
         state,
@@ -134,7 +143,7 @@ def publish_current_snapshot(
     state_bytes = (
         json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
-    api.upload_file(
+    state_commit = api.upload_file(
         path_or_fileobj=state_bytes,
         path_in_repo=HF_REFRESH_STATE_PATH,
         repo_id=repo_id,
@@ -142,8 +151,23 @@ def publish_current_snapshot(
         token=token,
         commit_message=f"Finalize current snapshot for {current_path}",
     )
+    final_commit_sha = extract_hf_commit_sha(state_commit) or current_commit_sha
+    if release_tag is not None and final_commit_sha is not None:
+        create_release_tag(
+            api=api,
+            token=token,
+            repo_id=repo_id,
+            tag=release_tag,
+            commit_sha=final_commit_sha,
+        )
 
-    commit_info = current_commit if getattr(current_commit, "commit_url", None) else snapshot_commit
+    commit_info = (
+        state_commit
+        if getattr(state_commit, "commit_url", None)
+        else current_commit
+        if getattr(current_commit, "commit_url", None)
+        else snapshot_commit
+    )
     commit_url = getattr(commit_info, "commit_url", None)
     return SnapshotFinalizeResult(
         repo_id=repo_id,
@@ -152,5 +176,8 @@ def publish_current_snapshot(
         current_path=current_path,
         current_manifest_path=current_manifest_path,
         state_path=HF_REFRESH_STATE_PATH,
+        commit_sha=final_commit_sha,
+        bundle_commit_sha=current_commit_sha,
         commit_url=commit_url,
+        release_tag=release_tag,
     )

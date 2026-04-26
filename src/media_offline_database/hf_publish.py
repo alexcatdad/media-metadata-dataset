@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
@@ -14,11 +15,15 @@ from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
 HF_REFRESH_STATE_PATH = "state/refresh-state.json"
+HF_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class HfCommitInfoLike(Protocol):
     @property
     def commit_url(self) -> str | None: ...
+
+    @property
+    def oid(self) -> str | None: ...
 
 
 class HfApiLike(Protocol):
@@ -63,6 +68,17 @@ class HfApiLike(Protocol):
         commit_message: str | None = None,
     ) -> HfCommitInfoLike | object: ...
 
+    def create_tag(
+        self,
+        *,
+        repo_id: str,
+        tag: str,
+        revision: str | None = None,
+        tag_message: str | None = None,
+        token: str | bool | None = None,
+        repo_type: str | None = None,
+    ) -> object: ...
+
 
 def _hf_whoami(api: HfApiLike, *, token: str | None) -> dict[str, object]:
     return api.whoami(token=token, cache=False)
@@ -74,7 +90,10 @@ class HfPublishResult(BaseModel):
     repo_id: str
     checkpoint_path: str
     state_path: str
+    commit_sha: str | None = None
+    bundle_commit_sha: str | None = None
     commit_url: str | None = None
+    release_tag: str | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +139,39 @@ def build_publish_bundle(manifest_path: Path) -> PublishBundle:
         manifest_path=manifest_path,
         local_dir=local_dir,
         allow_patterns=deduped_patterns,
+    )
+
+
+def extract_hf_commit_sha(commit_info: object) -> str | None:
+    oid = getattr(commit_info, "oid", None)
+    if isinstance(oid, str) and HF_COMMIT_SHA_RE.fullmatch(oid):
+        return oid
+
+    commit_url = getattr(commit_info, "commit_url", None)
+    if not isinstance(commit_url, str):
+        return None
+
+    candidate = commit_url.rstrip("/").rsplit("/", maxsplit=1)[-1]
+    if HF_COMMIT_SHA_RE.fullmatch(candidate):
+        return candidate
+    return None
+
+
+def create_release_tag(
+    *,
+    api: HfApiLike,
+    token: str,
+    repo_id: str,
+    tag: str,
+    commit_sha: str,
+) -> None:
+    api.create_tag(
+        repo_id=repo_id,
+        tag=tag,
+        revision=commit_sha,
+        tag_message=f"Release snapshot {tag}",
+        token=token,
+        repo_type="dataset",
     )
 
 
@@ -190,6 +242,7 @@ def publish_checkpoint_bundle(
     state: RefreshState,
     private: bool = True,
     write_dataset_card: bool = True,
+    release_tag: str | None = None,
 ) -> HfPublishResult:
     api.create_repo(
         repo_id,
@@ -209,7 +262,7 @@ def publish_checkpoint_bundle(
         )
 
     bundle = build_publish_bundle(manifest_path)
-    commit_info = api.upload_folder(
+    bundle_commit_info = api.upload_folder(
         repo_id=repo_id,
         folder_path=bundle.local_dir,
         path_in_repo=checkpoint_path,
@@ -218,11 +271,12 @@ def publish_checkpoint_bundle(
         repo_type="dataset",
         allow_patterns=bundle.allow_patterns,
     )
+    bundle_commit_sha = extract_hf_commit_sha(bundle_commit_info)
 
     state_bytes = (
         json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
-    api.upload_file(
+    state_commit_info = api.upload_file(
         path_or_fileobj=state_bytes,
         path_in_repo=HF_REFRESH_STATE_PATH,
         repo_id=repo_id,
@@ -230,11 +284,27 @@ def publish_checkpoint_bundle(
         token=token,
         commit_message=f"Update refresh state for {checkpoint_path}",
     )
+    commit_sha = extract_hf_commit_sha(state_commit_info) or bundle_commit_sha
+    if release_tag is not None and commit_sha is not None:
+        create_release_tag(
+            api=api,
+            token=token,
+            repo_id=repo_id,
+            tag=release_tag,
+            commit_sha=commit_sha,
+        )
 
-    commit_url = getattr(commit_info, "commit_url", None)
+    commit_url = getattr(state_commit_info, "commit_url", None) or getattr(
+        bundle_commit_info,
+        "commit_url",
+        None,
+    )
     return HfPublishResult(
         repo_id=repo_id,
         checkpoint_path=checkpoint_path,
         state_path=HF_REFRESH_STATE_PATH,
+        commit_sha=commit_sha,
+        bundle_commit_sha=bundle_commit_sha,
         commit_url=commit_url,
+        release_tag=release_tag,
     )

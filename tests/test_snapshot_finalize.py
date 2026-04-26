@@ -14,11 +14,14 @@ from media_offline_database.snapshot_finalize import (
 )
 
 runner = CliRunner()
+BUNDLE_COMMIT_SHA = "fedcba0987654321fedcba0987654321fedcba09"
+FINAL_COMMIT_SHA = "0123456789abcdef0123456789abcdef01234567"
 
 
 class FakeCommitInfo:
-    def __init__(self, commit_url: str | None = None) -> None:
+    def __init__(self, commit_url: str | None = None, oid: str | None = None) -> None:
         self.commit_url = commit_url
+        self.oid = oid
 
 
 class FakeHfApi:
@@ -26,6 +29,7 @@ class FakeHfApi:
         self.created_repos: list[dict[str, object]] = []
         self.uploaded_folders: list[dict[str, object]] = []
         self.uploaded_files: list[dict[str, object]] = []
+        self.created_tags: list[dict[str, object]] = []
 
     def create_repo(
         self,
@@ -58,11 +62,21 @@ class FakeHfApi:
 
     def upload_folder(self, **kwargs: object) -> FakeCommitInfo:
         self.uploaded_folders.append(dict(kwargs))
-        return FakeCommitInfo("https://huggingface.co/commit/finalize")
+        return FakeCommitInfo(
+            f"https://huggingface.co/commit/{BUNDLE_COMMIT_SHA}",
+            BUNDLE_COMMIT_SHA,
+        )
 
     def upload_file(self, **kwargs: object) -> FakeCommitInfo:
         self.uploaded_files.append(dict(kwargs))
-        return FakeCommitInfo()
+        return FakeCommitInfo(
+            f"https://huggingface.co/commit/{FINAL_COMMIT_SHA}",
+            FINAL_COMMIT_SHA,
+        )
+
+    def create_tag(self, **kwargs: object) -> object:
+        self.created_tags.append(dict(kwargs))
+        return object()
 
 
 def _write_manifest_bundle(tmp_path: Path) -> Path:
@@ -92,6 +106,31 @@ def _write_manifest_bundle(tmp_path: Path) -> Path:
     return manifest_path
 
 
+def _write_nested_manifest_bundle(tmp_path: Path) -> Path:
+    artifact_dir = tmp_path / "compiled"
+    tables_dir = artifact_dir / "tables"
+    tables_dir.mkdir(parents=True)
+    entities_path = tables_dir / "sample-entities.parquet"
+    entities_path.write_bytes(b"entities")
+    manifest_path = artifact_dir / "sample-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "bootstrap-corpus",
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=1,
+                ),
+                "files": [
+                    {"path": "tables/sample-entities.parquet", "kind": "entities"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
 def test_materialize_current_snapshot_copies_bundle_to_snapshot_and_current(
     tmp_path: Path,
 ) -> None:
@@ -113,6 +152,24 @@ def test_materialize_current_snapshot_copies_bundle_to_snapshot_and_current(
     assert (snapshot_dir / "sample-entities.parquet").read_bytes() == b"entities"
     assert (current_dir / "sample-manifest.json").exists()
     assert (current_dir / "sample-relationships.parquet").read_bytes() == b"relationships"
+
+
+def test_materialize_current_snapshot_preserves_nested_bundle_paths(tmp_path: Path) -> None:
+    manifest_path = _write_nested_manifest_bundle(tmp_path)
+
+    result = materialize_current_snapshot(
+        manifest_path=manifest_path,
+        output_dir=tmp_path / "finalized",
+        job_name="anime.manami.default",
+        snapshot_id="2026-14",
+    )
+
+    snapshot_dir = tmp_path / "finalized" / "snapshots" / "anime.manami.default" / "2026-14"
+    current_dir = tmp_path / "finalized" / "current" / "anime.manami.default"
+
+    assert Path(result.snapshot_manifest_path) == snapshot_dir / "sample-manifest.json"
+    assert (snapshot_dir / "tables" / "sample-entities.parquet").read_bytes() == b"entities"
+    assert (current_dir / "tables" / "sample-entities.parquet").read_bytes() == b"entities"
 
 
 def test_publish_current_snapshot_uploads_snapshot_current_and_updates_state(
@@ -146,6 +203,8 @@ def test_publish_current_snapshot_uploads_snapshot_current_and_updates_state(
     assert result.current_manifest_path == (
         "current/anime.manami.default/sample-manifest.json"
     )
+    assert result.bundle_commit_sha == BUNDLE_COMMIT_SHA
+    assert result.commit_sha == FINAL_COMMIT_SHA
 
     state_bytes = fake_api.uploaded_files[1]["path_or_fileobj"]
     assert isinstance(state_bytes, bytes)
@@ -154,6 +213,35 @@ def test_publish_current_snapshot_uploads_snapshot_current_and_updates_state(
     assert job["status"] == "completed"
     assert job["published_snapshot_path"] == "snapshots/anime.manami.default/2026-14"
     assert job["current_snapshot_path"] == "current/anime.manami.default"
+
+
+def test_publish_current_snapshot_can_create_release_tag(tmp_path: Path) -> None:
+    manifest_path = _write_manifest_bundle(tmp_path)
+    fake_api = FakeHfApi()
+
+    result = publish_current_snapshot(
+        api=fake_api,
+        token="hf_test",
+        repo_id="alecatdad/media-metadata-dataset-test",
+        manifest_path=manifest_path,
+        state=RefreshState(),
+        job_name="anime.manami.default",
+        snapshot_id="2026-14",
+        private=True,
+        release_tag="v0.1.0",
+    )
+
+    assert result.release_tag == "v0.1.0"
+    assert fake_api.created_tags == [
+        {
+            "repo_id": "alecatdad/media-metadata-dataset-test",
+            "tag": "v0.1.0",
+            "revision": FINAL_COMMIT_SHA,
+            "tag_message": "Release snapshot v0.1.0",
+            "token": "hf_test",
+            "repo_type": "dataset",
+        }
+    ]
 
 
 def test_materialize_current_snapshot_surface_cli(tmp_path: Path) -> None:

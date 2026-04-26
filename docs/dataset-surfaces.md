@@ -50,9 +50,11 @@ Each publish to the Hugging Face dataset repo should be treated as a physical sn
 `v1.0.0`, so consumers can pin to a stable revision. Consumers that need exact reproducibility
 should pin the full Hugging Face commit SHA rather than relying on `main`.
 
-The manifest should record the Hugging Face repo ID, full commit SHA, branch or tag used for the
-publish, artifact paths, schema versions, source snapshot IDs, recipe versions, row counts,
-published timestamp, and compatibility notes.
+The manifest should record artifact paths, schema versions, source snapshot IDs, recipe versions,
+row counts, published timestamp, and compatibility notes. Publication tooling returns the full
+Hugging Face commit SHA for exact pinning and can create supported release tags. The manifest does
+not try to contain the SHA of the commit that contains itself; that self-referential contract is not
+stable on Git-backed dataset hosts.
 
 Do not duplicate every historical snapshot as dated folders on `main`. The current branch should
 contain the current Parquet tables and current manifest; Hugging Face Git history, tags, and commit
@@ -173,6 +175,11 @@ Compatibility tiers:
   allowed with explicit version bumps and manifest notices.
 - `derived`: recipe-versioned and recomputable; breaking changes allowed with manifest notices.
 - `experimental`: no compatibility guarantee; must be clearly marked as experimental or unstable.
+
+Snapshot compatibility validation compares manifests before release. Core table removal or core
+major-schema movement is an error. Profile and derived version movement is reported as a warning so
+the manifest or release notes can declare the change. Experimental surfaces are reported
+informationally and carry no compatibility guarantee.
 
 ## Entity Identity Contract
 

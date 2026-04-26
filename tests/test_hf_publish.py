@@ -13,10 +13,14 @@ from media_offline_database.publishability import PublishableUse, publishability
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
+BUNDLE_COMMIT_SHA = "1234567890abcdef1234567890abcdef12345678"
+FINAL_COMMIT_SHA = "abcdef1234567890abcdef1234567890abcdef12"
+
 
 class FakeCommitInfo:
-    def __init__(self, commit_url: str | None = None) -> None:
+    def __init__(self, commit_url: str | None = None, oid: str | None = None) -> None:
         self.commit_url = commit_url
+        self.oid = oid
 
 
 class FakeHfApi:
@@ -24,6 +28,7 @@ class FakeHfApi:
         self.created_repos: list[dict[str, object]] = []
         self.uploaded_folders: list[dict[str, object]] = []
         self.uploaded_files: list[dict[str, object]] = []
+        self.created_tags: list[dict[str, object]] = []
 
     def create_repo(
         self,
@@ -78,7 +83,10 @@ class FakeHfApi:
                 "ignore_patterns": ignore_patterns,
             }
         )
-        return FakeCommitInfo("https://huggingface.co/commit/123")
+        return FakeCommitInfo(
+            f"https://huggingface.co/commit/{BUNDLE_COMMIT_SHA}",
+            BUNDLE_COMMIT_SHA,
+        )
 
     def upload_file(
         self,
@@ -100,7 +108,32 @@ class FakeHfApi:
                 "commit_message": commit_message,
             }
         )
-        return FakeCommitInfo()
+        return FakeCommitInfo(
+            f"https://huggingface.co/commit/{FINAL_COMMIT_SHA}",
+            FINAL_COMMIT_SHA,
+        )
+
+    def create_tag(
+        self,
+        *,
+        repo_id: str,
+        tag: str,
+        revision: str | None = None,
+        tag_message: str | None = None,
+        token: str | bool | None = None,
+        repo_type: str | None = None,
+    ) -> object:
+        self.created_tags.append(
+            {
+                "repo_id": repo_id,
+                "tag": tag,
+                "revision": revision,
+                "tag_message": tag_message,
+                "token": token,
+                "repo_type": repo_type,
+            }
+        )
+        return object()
 
 
 def _write_manifest_bundle(tmp_path: Path) -> Path:
@@ -226,4 +259,37 @@ def test_publish_checkpoint_bundle_uploads_artifact_and_state(tmp_path: Path) ->
     ]
     assert result.repo_id == "alecatdad/media-metadata-dataset-test"
     assert result.state_path == HF_REFRESH_STATE_PATH
-    assert result.commit_url == "https://huggingface.co/commit/123"
+    assert result.bundle_commit_sha == BUNDLE_COMMIT_SHA
+    assert result.commit_sha == FINAL_COMMIT_SHA
+    assert result.commit_url == f"https://huggingface.co/commit/{FINAL_COMMIT_SHA}"
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert "huggingface" not in manifest
+
+
+def test_publish_checkpoint_bundle_can_create_release_tag(tmp_path: Path) -> None:
+    fake_api = FakeHfApi()
+    manifest_path = _write_manifest_bundle(tmp_path)
+
+    result = publish_checkpoint_bundle(
+        api=fake_api,
+        token="hf_test",
+        repo_id="alecatdad/media-metadata-dataset-test",
+        manifest_path=manifest_path,
+        checkpoint_path="checkpoints/manual",
+        state=RefreshState(),
+        private=True,
+        release_tag="v0.1.0",
+    )
+
+    assert result.release_tag == "v0.1.0"
+    assert fake_api.created_tags == [
+        {
+            "repo_id": "alecatdad/media-metadata-dataset-test",
+            "tag": "v0.1.0",
+            "revision": FINAL_COMMIT_SHA,
+            "tag_message": "Release snapshot v0.1.0",
+            "token": "hf_test",
+            "repo_type": "dataset",
+        }
+    ]

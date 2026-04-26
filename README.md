@@ -183,7 +183,8 @@ The dataset continuity layer should live with the published dataset, not inside 
 - Hugging Face dataset commits are physical snapshots of the published Parquet artifacts plus
   manifest.
 - `main` is the moving latest pointer; supported releases should be tagged.
-- Exact consumers should pin a full Hugging Face commit SHA recorded in the manifest.
+- Exact consumers should pin the full Hugging Face commit SHA returned by publication tooling or
+  the supported release tag.
 - Each refresh job records progress by source snapshot plus stable batch offsets.
 - Partial checkpoint uploads are allowed; the next run resumes from the last persisted offset for
   that snapshot.
@@ -193,8 +194,17 @@ Current commands:
 ```sh
 docker compose run --rm app mod hf-state --repo-id namespace/media-metadata-dataset-test
 docker compose run --rm app mod hf-publish /path/to/manifest.json --repo-id namespace/media-metadata-dataset-test
+docker compose run --rm app mod hf-publish /path/to/manifest.json \
+  --repo-id namespace/media-metadata-dataset-test \
+  --release-tag v0.1.0
 docker compose run --rm app mod manami-refresh \
   --input-path /path/to/anime-offline-database.json \
   --repo-id namespace/media-metadata-dataset-test \
   --batch-size 100
+docker compose run --rm app mod validate-snapshot-compatibility \
+  /path/to/previous-manifest.json \
+  /path/to/current-manifest.json
 ```
+
+See [publication-refresh.md](docs/runbooks/publication-refresh.md) for the containerized publish,
+tag, compatibility, and refresh-continuity workflow.
