@@ -117,6 +117,10 @@ def _write_nested_manifest_bundle(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "artifact": "bootstrap-corpus",
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=1,
+                ),
                 "files": [
                     {"path": "tables/sample-entities.parquet", "kind": "entities"},
                 ],
