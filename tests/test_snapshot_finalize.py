@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from media_offline_database.cli import app
 from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
 from media_offline_database.refresh_state import RefreshState
+from media_offline_database.release_readiness import ReleaseReadinessError
 from media_offline_database.snapshot_finalize import (
     materialize_current_snapshot,
     publish_current_snapshot,
@@ -170,6 +172,39 @@ def test_materialize_current_snapshot_preserves_nested_bundle_paths(tmp_path: Pa
     assert Path(result.snapshot_manifest_path) == snapshot_dir / "sample-manifest.json"
     assert (snapshot_dir / "tables" / "sample-entities.parquet").read_bytes() == b"entities"
     assert (current_dir / "tables" / "sample-entities.parquet").read_bytes() == b"entities"
+
+
+def test_materialize_current_snapshot_rejects_unready_v1_bundle(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "compiled"
+    artifact_dir.mkdir(parents=True)
+    manifest_path = artifact_dir / "media-metadata-v1-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "media-metadata-v1",
+                "dataset_line": "media-metadata-v1",
+                "dataset_version": "0.1.0",
+                "core_schema_version": "core.v1",
+                "domains": ["anime"],
+                "source_coverage": [],
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=0,
+                ),
+                "files": [],
+                "tables": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReleaseReadinessError, match="required_domains_missing"):
+        materialize_current_snapshot(
+            manifest_path=manifest_path,
+            output_dir=tmp_path / "finalized",
+            job_name="local.v1",
+            snapshot_id="2026-04-26",
+        )
 
 
 def test_publish_current_snapshot_uploads_snapshot_current_and_updates_state(

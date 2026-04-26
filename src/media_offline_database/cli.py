@@ -47,6 +47,7 @@ from media_offline_database.llm_enhancement import (
 )
 from media_offline_database.query import build_query_preview, load_query_entities
 from media_offline_database.refresh import run_manami_refresh_checkpoint
+from media_offline_database.release_readiness import validate_release_readiness
 from media_offline_database.settings import Settings
 from media_offline_database.snapshot_compatibility import validate_snapshot_compatibility
 from media_offline_database.snapshot_finalize import (
@@ -290,6 +291,13 @@ V1CoreOutputDirOption = Annotated[
     typer.Option(
         "--output-dir",
         help="Directory where the v1 core/profile artifact should be written.",
+    ),
+]
+V1CoreSourceSnapshotIdOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--source-snapshot-id",
+        help="Source snapshot mapping as source_id=snapshot_id. May be passed more than once.",
     ),
 ]
 HfRepoIdOption = Annotated[
@@ -589,14 +597,31 @@ def wikidata_movie_build(
 def v1_core_artifact(
     input_path: V1CoreInputPathOption,
     output_dir: V1CoreOutputDirOption = DEFAULT_V1_OUTPUT_DIR,
+    source_snapshot_id: V1CoreSourceSnapshotIdOption = None,
 ) -> None:
     """Compile bootstrap-like seeds into v1 shared core and profile tables."""
 
     manifest_path = write_v1_core_artifact(
         input_paths=input_path,
         output_dir=output_dir,
+        source_snapshot_ids=_parse_source_snapshot_ids(source_snapshot_id),
     )
     console.print({"manifest": str(manifest_path)})
+
+
+def _parse_source_snapshot_ids(values: list[str] | None) -> dict[str, str] | None:
+    if values is None:
+        return None
+
+    parsed: dict[str, str] = {}
+    for value in values:
+        source_id, separator, snapshot_id = value.partition("=")
+        if separator != "=" or not source_id or not snapshot_id:
+            raise typer.BadParameter(
+                "--source-snapshot-id values must use source_id=snapshot_id"
+            )
+        parsed[source_id] = snapshot_id
+    return parsed
 
 
 @app.command()
@@ -802,6 +827,18 @@ def validate_snapshot_compatibility_command(
     )
     console.print_json(json=report.model_dump_json(indent=2))
     if not report.compatible:
+        raise typer.Exit(code=1)
+
+
+@app.command("validate-release-readiness")
+def validate_release_readiness_command(
+    manifest_path: ManifestPathArgument,
+) -> None:
+    """Validate that a compiled artifact bundle is ready for release materialization."""
+
+    report = validate_release_readiness(manifest_path)
+    console.print_json(json=report.model_dump_json(indent=2))
+    if not report.ready:
         raise typer.Exit(code=1)
 
 

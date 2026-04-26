@@ -50,6 +50,51 @@ def test_snapshot_compatibility_errors_when_core_table_disappears(tmp_path: Path
     assert report.findings[0].severity == "error"
 
 
+def test_snapshot_compatibility_prefers_table_metadata_for_v1_manifests(
+    tmp_path: Path,
+) -> None:
+    previous = tmp_path / "previous-v1.json"
+    previous.write_text(
+        json.dumps(
+            {
+                "artifact": "media-metadata-v1",
+                "artifact_version": 1,
+                "files": [{"path": "entities.parquet", "kind": "entities"}],
+                "tables": [
+                    {
+                        "table_name": "entities",
+                        "path": "entities.parquet",
+                        "schema_version": "1.0.0",
+                        "compatibility_tier": "core",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    current = tmp_path / "current-v1.json"
+    current.write_text(
+        json.dumps(
+            {
+                "artifact": "media-metadata-v1",
+                "artifact_version": 1,
+                "files": [],
+                "tables": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = validate_snapshot_compatibility(
+        previous_manifest_path=previous,
+        current_manifest_path=current,
+    )
+
+    assert not report.compatible
+    assert report.findings[0].code == "table_removed"
+    assert report.findings[0].tier == "core"
+
+
 def test_snapshot_compatibility_reports_profile_derived_and_experimental(
     tmp_path: Path,
 ) -> None:

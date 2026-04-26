@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from media_offline_database.hf_publish import (
     HF_REFRESH_STATE_PATH,
     build_publish_bundle,
@@ -11,6 +13,7 @@ from media_offline_database.hf_publish import (
 )
 from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
 from media_offline_database.refresh_state import RefreshState
+from media_offline_database.release_readiness import ReleaseReadinessError
 from media_offline_database.settings import Settings
 
 BUNDLE_COMMIT_SHA = "1234567890abcdef1234567890abcdef12345678"
@@ -175,6 +178,34 @@ def test_build_publish_bundle_collects_manifest_files(tmp_path: Path) -> None:
         "sample-entities.parquet",
         "sample-relationships.parquet",
     ]
+
+
+def test_build_publish_bundle_rejects_unready_v1_manifest(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "compiled"
+    artifact_dir.mkdir(parents=True)
+    manifest_path = artifact_dir / "media-metadata-v1-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "media-metadata-v1",
+                "dataset_line": "media-metadata-v1",
+                "dataset_version": "0.1.0",
+                "core_schema_version": "core.v1",
+                "domains": ["anime"],
+                "source_coverage": [],
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=0,
+                ),
+                "files": [],
+                "tables": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReleaseReadinessError, match="required_domains_missing"):
+        build_publish_bundle(manifest_path)
 
 
 def test_resolve_hf_repo_id_prefers_explicit_then_settings_then_whoami() -> None:

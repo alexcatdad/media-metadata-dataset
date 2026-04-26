@@ -91,7 +91,15 @@ def _write_seed(path: Path, entities: list[BootstrapEntity]) -> Path:
 def test_v1_core_artifact_emits_contract_tables(tmp_path: Path) -> None:
     seed_path = _write_seed(tmp_path / "seed.jsonl", _seed_entities())
 
-    manifest_path = write_v1_core_artifact(input_paths=[seed_path], output_dir=tmp_path / "out")
+    manifest_path = write_v1_core_artifact(
+        input_paths=[seed_path],
+        output_dir=tmp_path / "out",
+        source_snapshot_ids={
+            "manami": "manami:2026-04-02",
+            "tvmaze": "tvmaze:2026-04-26",
+            "wikidata": "wikidata:2026-04-26",
+        },
+    )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     files = {file["kind"]: file for file in manifest["files"]}
 
@@ -112,6 +120,9 @@ def test_v1_core_artifact_emits_contract_tables(tmp_path: Path) -> None:
     assert {entry["table_name"] for entry in manifest["tables"]} == expected_tables
     assert manifest["domains"] == ["anime", "movie", "tv"]
     assert "PUBLIC_PARQUET" in manifest["publishability"]["validated_uses"]
+    assert {
+        entry["source_snapshot_id"] for entry in manifest["source_coverage"]
+    } == {"manami:2026-04-02", "tvmaze:2026-04-26", "wikidata:2026-04-26"}
 
     contracts = {**CORE_TABLE_CONTRACTS, **PROFILE_TABLE_CONTRACTS}
     for table_name in expected_tables:
@@ -170,3 +181,4 @@ def test_v1_core_artifact_cli_exposes_command() -> None:
 
     assert result.exit_code == 0
     assert "v1 shared core" in result.stdout
+    assert "--source-snapshot-id" in result.stdout

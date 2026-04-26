@@ -25,8 +25,26 @@ docker compose run --rm app mod v1-core-artifact \
   --input-path .mod/out/milestone-anime-build-YYYY-MM-DD/metadata-enriched/manami-enriched-metadata.jsonl \
   --input-path .mod/out/milestone-tvmaze-build-YYYY-MM-DD/normalized/tvmaze-normalized.jsonl \
   --input-path .mod/out/milestone-wikidata-movie-build-YYYY-MM-DD/normalized/wikidata-movie-normalized.jsonl \
+  --source-snapshot-id manami=manami:YYYY-MM-DD \
+  --source-snapshot-id tvmaze=tvmaze:YYYY-MM-DD \
+  --source-snapshot-id wikidata=wikidata:YYYY-MM-DD \
   --output-dir .mod/out/milestone-v1-core-YYYY-MM-DD
 ```
+
+Release-intended builds must pass explicit `--source-snapshot-id` values. Builds with
+`*:unspecified` snapshot IDs are acceptable smoke runs, but they are not release-ready.
+
+## Release Readiness
+
+```sh
+docker compose run --rm app mod validate-release-readiness \
+  .mod/out/milestone-v1-core-YYYY-MM-DD/media-metadata-v1-manifest.json
+```
+
+The readiness gate validates the v1 manifest identity, publishability policy, required anime/TV/movie
+source coverage, source snapshot IDs, manifest/table/file consistency, physical Parquet row counts,
+required columns, and meaningful per-domain rows before current materialization or Hugging Face
+publication.
 
 ## Local Current Snapshot
 

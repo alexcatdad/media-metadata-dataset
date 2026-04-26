@@ -47,6 +47,29 @@ def _major(version: object) -> int | None:
     return None
 
 
+def _entries_by_kind(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    table_entries = _tables_by_name(manifest)
+    if table_entries:
+        return table_entries
+    return _files_by_kind(manifest)
+
+
+def _tables_by_name(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    tables = cast(object, manifest.get("tables"))
+    if not isinstance(tables, list):
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for raw_table_entry in cast(list[object], tables):
+        table_entry = raw_table_entry
+        if not isinstance(table_entry, dict):
+            continue
+        table_entry_data = cast(dict[str, Any], table_entry)
+        table_name = cast(object, table_entry_data.get("table_name"))
+        if isinstance(table_name, str):
+            indexed[table_name] = table_entry_data
+    return indexed
+
+
 def _files_by_kind(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     files = cast(object, manifest.get("files"))
     if not isinstance(files, list):
@@ -103,8 +126,8 @@ def validate_snapshot_compatibility(
             )
         )
 
-    previous_files = _files_by_kind(previous)
-    current_files = _files_by_kind(current)
+    previous_files = _entries_by_kind(previous)
+    current_files = _entries_by_kind(current)
     for kind, previous_file in previous_files.items():
         previous_tier = _tier_for_file(previous_file)
         current_file = current_files.get(kind)
