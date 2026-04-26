@@ -333,6 +333,23 @@ def relationship_evidence_id(
     return f"relationship-evidence:{digest}"
 
 
+def relationship_id(
+    *,
+    source_entity_id: str,
+    target_entity_id: str,
+    relationship: str,
+) -> str:
+    payload = {
+        "relationship": relationship,
+        "source_entity_id": source_entity_id,
+        "target_entity_id": target_entity_id,
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:20]
+    return f"relationship:{digest}"
+
+
 def relationship_quality_flags(edge: RelationshipEdgeLike) -> list[str]:
     contract = relationship_contract(edge.relationship)
     flags = [RelationshipQualityFlag.SOURCE_BACKED.value]

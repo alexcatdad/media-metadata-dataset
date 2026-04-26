@@ -63,10 +63,10 @@ def test_bootstrap_artifact_round_trips_through_duckdb(tmp_path: Path) -> None:
     ).fetchall()
     relationship_sample = duckdb.sql(
         """
-        select source_entity_id, relationship, target_entity_id, supporting_urls,
+        select source_entity_id, relationship_type, target_entity_id, supporting_urls,
                supporting_source_count, supporting_provider_count, relationship_confidence_score
         from read_parquet(?)
-        order by source_entity_id, relationship, target_entity_id
+        order by source_entity_id, relationship_type, target_entity_id
         limit 3
         """,
         params=[str(relationships_path)],
@@ -151,29 +151,32 @@ def test_bootstrap_frames_split_entities_and_relationships() -> None:
     assert "creators" in entity_frame.columns
     assert entity_frame.height == 18
     assert relationship_frame.columns == [
+        "relationship_id",
         "source_entity_id",
         "target_entity_id",
-        "relationship",
+        "relationship_type",
         "relationship_family",
-        "relationship_direction",
-        "inverse_relationship",
-        "target_url",
-        "supporting_urls",
+        "direction",
+        "inverse_relationship_type",
+        "confidence_tier",
+        "evidence_count",
+        "conflict_status",
+        "quality_flags",
         "evidence_id",
         "provenance_id",
+        "recipe_version",
+        "target_url",
+        "supporting_urls",
         "supporting_source_count",
         "supporting_provider_count",
         "relationship_confidence_score",
-        "confidence_tier",
         "confidence_profile_json",
-        "quality_flags",
-        "recipe_version",
     ]
     assert relationship_frame.height == 21
     assert relationship_frame.select(
         [
             "relationship_family",
-            "relationship_direction",
+            "direction",
             "confidence_tier",
             "recipe_version",
         ]

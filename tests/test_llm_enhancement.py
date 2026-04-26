@@ -117,7 +117,7 @@ def _write_manifest(
             {
                 "source_entity_id": "anime:one",
                 "target_entity_id": "anime:two",
-                "relationship": relationship,
+                "relationship_type": relationship,
                 "target_url": "https://example.com/anime/two",
                 "supporting_urls": ["https://example.com/anime/two"],
                 "supporting_source_count": 1,

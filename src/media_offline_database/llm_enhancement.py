@@ -166,13 +166,13 @@ def _normalized_candidate_input(
             "creators": list(target_row.get("creators") or []),
         },
         "relationship": {
-            "current": relationship_row["relationship"],
+            "current": relationship_row["relationship_type"],
             "confidence_score": relationship_row["relationship_confidence_score"],
             "supporting_source_count": relationship_row["supporting_source_count"],
             "supporting_provider_count": relationship_row["supporting_provider_count"],
             "supporting_urls": list(relationship_row.get("supporting_urls") or []),
             "previous": {
-                "relationship": None if previous_row is None else previous_row["relationship"],
+                "relationship": None if previous_row is None else previous_row["relationship_type"],
                 "confidence_score": (
                     None
                     if previous_row is None
@@ -198,7 +198,7 @@ def select_llm_relationship_candidates(
 
     for relationship_row in _load_relationship_rows(manifest_path):
         if float(relationship_row["relationship_confidence_score"]) >= confidence_threshold and str(
-            relationship_row["relationship"]
+            relationship_row["relationship_type"]
         ) != "related_anime":
             continue
 
@@ -223,7 +223,7 @@ def select_llm_relationship_candidates(
         )
 
         changed_since_previous = previous_row is None or (
-            previous_row["relationship"] != relationship_row["relationship"]
+            previous_row["relationship_type"] != relationship_row["relationship_type"]
             or float(previous_row["relationship_confidence_score"])
             != float(relationship_row["relationship_confidence_score"])
         )
@@ -232,7 +232,7 @@ def select_llm_relationship_candidates(
             LlmRelationshipCandidate(
                 source_entity_id=source_entity_id,
                 target_entity_id=target_entity_id,
-                relationship=str(relationship_row["relationship"]),
+                relationship=str(relationship_row["relationship_type"]),
                 source_domain=str(source_row["domain"]),
                 target_domain=str(target_row["domain"]),
                 source_title=str(source_row["title"]),
@@ -258,7 +258,7 @@ def select_llm_relationship_candidates(
                 supporting_provider_count=int(relationship_row["supporting_provider_count"]),
                 supporting_urls=list(relationship_row.get("supporting_urls") or []),
                 previous_relationship=(
-                    None if previous_row is None else str(previous_row["relationship"])
+                    None if previous_row is None else str(previous_row["relationship_type"])
                 ),
                 previous_relationship_confidence_score=(
                     None
@@ -587,14 +587,14 @@ def apply_llm_relationship_judgments(
         new_relationship = decision.judgment.relationship.value
         new_confidence = float(decision.judgment.confidence)
         if (
-            str(row_dict["relationship"]) == new_relationship
+            str(row_dict["relationship_type"]) == new_relationship
             and float(row_dict["relationship_confidence_score"]) == new_confidence
         ):
             unchanged_count += 1
             updated_rows.append(row_dict)
             continue
 
-        row_dict["relationship"] = new_relationship
+        row_dict["relationship_type"] = new_relationship
         row_dict["relationship_confidence_score"] = new_confidence
         updated_rows.append(row_dict)
         applied_count += 1
