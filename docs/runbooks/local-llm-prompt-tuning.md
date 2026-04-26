@@ -11,7 +11,8 @@ Use this runbook to test local LLM inference while tuning judgment prompts. This
 
 ## Inputs
 
-- Fixture: `benchmarks/fixtures/anime-chat-judgment-v1.jsonl`
+- Relationship fixture: `benchmarks/fixtures/anime-chat-judgment-v1.jsonl`
+- Inferred-facet fixture: `benchmarks/fixtures/media-facet-inference-judgment-v1.jsonl`
 - Ollama harness: `scripts/benchmark_ollama_local.py`
 - OpenAI-compatible local harness: `scripts/benchmark_openai_compat_local.py`
 - Output root: `.mod/out/benchmarks/`

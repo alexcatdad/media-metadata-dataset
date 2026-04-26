@@ -10,8 +10,17 @@ from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 from media_offline_database.modeling import (
+    ConfidenceProfile,
+    LlmEvidenceRef,
+    LlmInputRef,
+    LlmJudgmentKind,
+    LlmJudgmentRecord,
+    LlmJudgmentStatus,
+    LlmMaterializationRecipe,
+    LlmMaterializationTarget,
     LlmRelationshipJudgment,
     ModelTask,
+    evaluate_llm_materialization,
     model_cache_key,
     stable_json,
 )
@@ -25,6 +34,18 @@ from media_offline_database.publishability import (
 DEFAULT_LLM_PROVIDER = "openrouter"
 DEFAULT_LLM_MODEL = "inclusionai/ling-2.6-flash:free"
 DEFAULT_LLM_RECIPE_VERSION = "relationship-classification-v1"
+DEFAULT_LLM_OUTPUT_SCHEMA_VERSION = "llm-relationship-judgment-output-v1"
+DEFAULT_LLM_MATERIALIZATION_RECIPE_VERSION = "relationship-materialization-v1"
+LLM_PRIVATE_EXPERIMENT_POLICY_VERSION = "llm-private-experiment-v1"
+
+
+def _private_llm_sidecar_metadata() -> dict[str, str | bool]:
+    return {
+        "public": False,
+        "publishability_status": "private_experiment_only",
+        "publishability_policy_version": LLM_PRIVATE_EXPERIMENT_POLICY_VERSION,
+        "compatibility_tier": "experimental",
+    }
 
 
 class LlmRelationshipCandidate(BaseModel):
@@ -105,11 +126,16 @@ class LlmApplyResult(BaseModel):
     eligible_decision_count: int
     applied_count: int
     unchanged_count: int
+    materialized_path: Path
     summary_path: Path
 
 
 class OpenAiClientLike(Protocol):
     chat: Any
+
+
+def _row_allows_private_llm_judgment_input(row: dict[str, Any]) -> bool:
+    return str(row.get("source_role") or "") == "BACKBONE_SOURCE"
 
 
 def _manifest_files(manifest_path: Path) -> dict[str, Path]:
@@ -213,6 +239,12 @@ def select_llm_relationship_candidates(
         target_entity_id = str(relationship_row["target_entity_id"])
         source_row = entity_rows[source_entity_id]
         target_row = entity_rows[target_entity_id]
+        if not (
+            _row_allows_private_llm_judgment_input(source_row)
+            and _row_allows_private_llm_judgment_input(target_row)
+        ):
+            continue
+
         previous_row = previous_rows.get((source_entity_id, target_entity_id))
         normalized_input = _normalized_candidate_input(
             source_row=source_row,
@@ -310,6 +342,9 @@ def write_llm_candidate_plan(
                 "manifest_path": str(manifest_path),
                 "provider": DEFAULT_LLM_PROVIDER,
                 "model": DEFAULT_LLM_MODEL,
+                "public": False,
+                "publishability_status": "private_experiment_only",
+                "publishability_policy_version": LLM_PRIVATE_EXPERIMENT_POLICY_VERSION,
             },
             indent=2,
             sort_keys=True,
@@ -321,8 +356,18 @@ def write_llm_candidate_plan(
     _ensure_manifest_sidecars(
         manifest_path,
         entries=[
-            {"path": candidates_path.name, "format": "jsonl", "kind": "llm_judgment_candidates"},
-            {"path": summary_path.name, "format": "json", "kind": "llm_judgment_summary"},
+            {
+                "path": candidates_path.name,
+                "format": "jsonl",
+                "kind": "llm_judgment_candidates",
+                **_private_llm_sidecar_metadata(),
+            },
+            {
+                "path": summary_path.name,
+                "format": "json",
+                "kind": "llm_judgment_summary",
+                **_private_llm_sidecar_metadata(),
+            },
         ],
     )
 
@@ -344,8 +389,11 @@ def build_relationship_judgment_prompt(candidate: LlmRelationshipCandidate) -> s
             SourceFieldReference(source_id="bootstrap_seed", field_name="genres"),
             SourceFieldReference(source_id="bootstrap_seed", field_name="studios"),
             SourceFieldReference(source_id="bootstrap_seed", field_name="creators"),
-            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship"),
-            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship_confidence"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship_type"),
+            SourceFieldReference(
+                source_id="bootstrap_seed",
+                field_name="relationship_confidence_score",
+            ),
             SourceFieldReference(source_id="bootstrap_seed", field_name="supporting_urls"),
         ],
         artifact="llm-judgment",
@@ -543,6 +591,9 @@ def execute_llm_relationship_candidates(
                 "provider": provider,
                 "model": model,
                 "recipe_version": recipe_version,
+                "public": False,
+                "publishability_status": "private_experiment_only",
+                "publishability_policy_version": LLM_PRIVATE_EXPERIMENT_POLICY_VERSION,
             },
             indent=2,
             sort_keys=True,
@@ -554,11 +605,17 @@ def execute_llm_relationship_candidates(
     _ensure_manifest_sidecars(
         manifest_path,
         entries=[
-            {"path": decisions_path.name, "format": "jsonl", "kind": "llm_judgment_decisions"},
+            {
+                "path": decisions_path.name,
+                "format": "jsonl",
+                "kind": "llm_judgment_decisions",
+                **_private_llm_sidecar_metadata(),
+            },
             {
                 "path": summary_path.name,
                 "format": "json",
                 "kind": "llm_judgment_execution_summary",
+                **_private_llm_sidecar_metadata(),
             },
         ],
     )
@@ -572,6 +629,148 @@ def execute_llm_relationship_candidates(
     )
 
 
+def default_relationship_materialization_recipe(
+    *,
+    min_confidence: float = 0.8,
+) -> LlmMaterializationRecipe:
+    return LlmMaterializationRecipe(
+        recipe_id="llm_relationship_materialization",
+        recipe_version=DEFAULT_LLM_MATERIALIZATION_RECIPE_VERSION,
+        target_surface=LlmMaterializationTarget.RELATIONSHIPS,
+        allowed_judgment_kinds=[LlmJudgmentKind.RELATIONSHIP_CLASSIFICATION],
+        output_schema_version=DEFAULT_LLM_OUTPUT_SCHEMA_VERSION,
+        publishability_policy_version="publishability-policy-v1",
+        min_confidence=min_confidence,
+        min_publishable_evidence_refs=1,
+        blocked_quality_flags=[
+            "low_confidence",
+            "non_publishable_input",
+            "unsupported_relationship",
+        ],
+        required_parameters={"temperature": 0},
+    )
+
+
+def _row_is_publishable_input(row: dict[str, Any]) -> bool:
+    return _row_allows_private_llm_judgment_input(row)
+
+
+def _relationship_evidence_is_publishable(
+    *,
+    relationship_row: dict[str, Any],
+    input_refs: list[LlmInputRef],
+) -> bool:
+    return (
+        all(input_ref.publishable for input_ref in input_refs)
+        and int(relationship_row.get("supporting_source_count") or 0) > 0
+        and int(relationship_row.get("supporting_provider_count") or 0) > 0
+    )
+
+
+def _legacy_decision_to_judgment_record(
+    *,
+    decision: LlmDecisionRecord,
+    relationship_row: dict[str, Any],
+    entity_rows: dict[str, dict[str, Any]],
+) -> LlmJudgmentRecord | None:
+    if decision.status != "ok" or decision.judgment is None:
+        return None
+
+    source_row = entity_rows.get(decision.source_entity_id)
+    target_row = entity_rows.get(decision.target_entity_id)
+    if source_row is None or target_row is None:
+        return None
+
+    input_refs = [
+        LlmInputRef(
+            ref_id=decision.source_entity_id,
+            ref_kind="entity",
+            source_role=str(source_row.get("source_role") or "unknown"),
+            policy_version="publishability-policy-v1",
+            publishable=_row_is_publishable_input(source_row),
+            allowed_uses=["llm_judgment"] if _row_is_publishable_input(source_row) else [],
+        ),
+        LlmInputRef(
+            ref_id=decision.target_entity_id,
+            ref_kind="entity",
+            source_role=str(target_row.get("source_role") or "unknown"),
+            policy_version="publishability-policy-v1",
+            publishable=_row_is_publishable_input(target_row),
+            allowed_uses=["llm_judgment"] if _row_is_publishable_input(target_row) else [],
+        ),
+    ]
+    evidence_refs = [
+        LlmEvidenceRef(
+            evidence_id=f"{decision.cache_key}:supporting_url:{index}",
+            evidence_kind="relationship_supporting_url",
+            claim=str(url),
+            publishable=_relationship_evidence_is_publishable(
+                relationship_row=relationship_row,
+                input_refs=input_refs,
+            ),
+        )
+        for index, url in enumerate(list(relationship_row.get("supporting_urls") or []), start=1)
+    ]
+    quality_flags = ["model_inferred"]
+    if decision.judgment.relationship.value == "uncertain":
+        quality_flags.append("unsupported_relationship")
+    if not all(input_ref.publishable for input_ref in input_refs):
+        quality_flags.append("non_publishable_input")
+
+    confidence = float(decision.judgment.confidence)
+    confidence_tier: Literal["high", "medium", "low", "unknown"]
+    if confidence >= 0.9:
+        confidence_tier = "high"
+    elif confidence >= 0.8:
+        confidence_tier = "medium"
+    else:
+        confidence_tier = "low"
+
+    return LlmJudgmentRecord(
+        judgment_id=decision.cache_key,
+        candidate_id=f"{decision.source_entity_id}:{decision.target_entity_id}:{decision.input_fingerprint}",
+        kind=LlmJudgmentKind.RELATIONSHIP_CLASSIFICATION,
+        status=LlmJudgmentStatus.APPROVED,
+        target_entity_ids=[decision.source_entity_id, decision.target_entity_id],
+        provider=decision.provider,
+        model=decision.model,
+        prompt_version=decision.recipe_version,
+        parameters={"temperature": 0, "max_tokens": 300},
+        input_refs=input_refs,
+        evidence_refs=evidence_refs,
+        output_schema_version=DEFAULT_LLM_OUTPUT_SCHEMA_VERSION,
+        structured_output=decision.judgment.model_dump(mode="json"),
+        confidence_profile=ConfidenceProfile(
+            confidence=confidence,
+            confidence_tier=confidence_tier,
+            evidence_strength="model_with_publishable_relationship_evidence",
+            agreement_status="unverified",
+            extraction_method="model_judgment",
+            freshness_status="unknown",
+            recipe_version=decision.recipe_version,
+        ),
+        quality_flags=quality_flags,
+        raw_response_ref=None if decision.raw_response is None else decision.cache_key,
+    )
+
+
+def _empty_materialized_relationships() -> pl.DataFrame:
+    return pl.DataFrame(
+        schema={
+            "source_entity_id": pl.String,
+            "target_entity_id": pl.String,
+            "relationship_type": pl.String,
+            "relationship_confidence_score": pl.Float64,
+            "judgment_id": pl.String,
+            "materialization_recipe_id": pl.String,
+            "materialization_recipe_version": pl.String,
+            "confidence_profile_json": pl.String,
+            "quality_flags": pl.List(pl.String),
+            "evidence_ref_ids": pl.List(pl.String),
+        }
+    )
+
+
 def apply_llm_relationship_judgments(
     *,
     manifest_path: Path,
@@ -579,8 +778,12 @@ def apply_llm_relationship_judgments(
     min_confidence: float = 0.8,
 ) -> LlmApplyResult:
     files = _manifest_files(manifest_path)
-    relationships_path = files["relationships"]
-    relationship_frame = pl.read_parquet(relationships_path)
+    relationship_frame = pl.read_parquet(files["relationships"])
+    entity_rows = _load_entity_rows(manifest_path)
+    relationship_rows_by_pair = {
+        (str(row["source_entity_id"]), str(row["target_entity_id"])): row
+        for row in relationship_frame.iter_rows(named=True)
+    }
 
     decisions: list[LlmDecisionRecord] = []
     for line in decisions_path.read_text(encoding="utf-8").splitlines():
@@ -588,45 +791,55 @@ def apply_llm_relationship_judgments(
             continue
         decisions.append(LlmDecisionRecord.model_validate_json(line))
 
-    eligible_by_pair = {
-        (decision.source_entity_id, decision.target_entity_id): decision
-        for decision in decisions
-        if decision.status == "ok"
-        and decision.judgment is not None
-        and float(decision.judgment.confidence) >= min_confidence
-    }
-
-    applied_count = 0
-    unchanged_count = 0
-    updated_rows: list[dict[str, Any]] = []
-    for row in relationship_frame.iter_rows(named=True):
-        row_dict = dict(row)
-        decision = eligible_by_pair.get(
-            (str(row_dict["source_entity_id"]), str(row_dict["target_entity_id"]))
+    recipe = default_relationship_materialization_recipe(min_confidence=min_confidence)
+    materialized_rows: list[dict[str, Any]] = []
+    gate_decisions: list[dict[str, Any]] = []
+    for decision in decisions:
+        relationship_row = relationship_rows_by_pair.get(
+            (decision.source_entity_id, decision.target_entity_id)
         )
-        if decision is None or decision.judgment is None:
-            unchanged_count += 1
-            updated_rows.append(row_dict)
+        if relationship_row is None:
+            continue
+        judgment_record = _legacy_decision_to_judgment_record(
+            decision=decision,
+            relationship_row=relationship_row,
+            entity_rows=entity_rows,
+        )
+        if judgment_record is None:
             continue
 
-        new_relationship = decision.judgment.relationship.value
-        new_confidence = float(decision.judgment.confidence)
-        if (
-            str(row_dict["relationship_type"]) == new_relationship
-            and float(row_dict["relationship_confidence_score"]) == new_confidence
-        ):
-            unchanged_count += 1
-            updated_rows.append(row_dict)
+        gate_decision = evaluate_llm_materialization(
+            judgment=judgment_record,
+            recipe=recipe,
+        )
+        gate_decisions.append(gate_decision.model_dump(mode="json"))
+        if not gate_decision.eligible:
             continue
 
-        row_dict["relationship_type"] = new_relationship
-        row_dict["relationship_confidence_score"] = new_confidence
-        updated_rows.append(row_dict)
-        applied_count += 1
+        materialized_rows.append(
+            {
+                "source_entity_id": judgment_record.target_entity_ids[0],
+                "target_entity_id": judgment_record.target_entity_ids[1],
+                "relationship_type": str(judgment_record.structured_output["relationship"]),
+                "relationship_confidence_score": judgment_record.confidence_profile.confidence,
+                "judgment_id": judgment_record.judgment_id,
+                "materialization_recipe_id": recipe.recipe_id,
+                "materialization_recipe_version": recipe.recipe_version,
+                "confidence_profile_json": judgment_record.confidence_profile.model_dump_json(),
+                "quality_flags": judgment_record.quality_flags,
+                "evidence_ref_ids": [
+                    evidence_ref.evidence_id for evidence_ref in judgment_record.evidence_refs
+                ],
+            }
+        )
 
-    updated_frame = pl.DataFrame(updated_rows, schema=relationship_frame.schema)
-    updated_frame.write_parquet(relationships_path, compression="zstd")
-
+    materialized_path = manifest_path.parent / "llm-materialized-relationships.parquet"
+    materialized_frame = (
+        pl.DataFrame(materialized_rows)
+        if materialized_rows
+        else _empty_materialized_relationships()
+    )
+    materialized_frame.write_parquet(materialized_path, compression="zstd")
     summary_path = manifest_path.parent / "llm-judgment-apply-summary.json"
     summary_path.write_text(
         json.dumps(
@@ -634,10 +847,19 @@ def apply_llm_relationship_judgments(
                 "manifest_path": str(manifest_path),
                 "decisions_path": str(decisions_path),
                 "relationship_count": relationship_frame.height,
-                "eligible_decision_count": len(eligible_by_pair),
-                "applied_count": applied_count,
-                "unchanged_count": unchanged_count,
+                "eligible_decision_count": sum(
+                    1 for gate_decision in gate_decisions if gate_decision["eligible"]
+                ),
+                "applied_count": len(materialized_rows),
+                "unchanged_count": relationship_frame.height,
                 "min_confidence": min_confidence,
+                "materialized_path": materialized_path.name,
+                "materialization_recipe_id": recipe.recipe_id,
+                "materialization_recipe_version": recipe.recipe_version,
+                "public": False,
+                "publishability_status": "private_experiment_only",
+                "publishability_policy_version": LLM_PRIVATE_EXPERIMENT_POLICY_VERSION,
+                "gate_decisions": gate_decisions,
             },
             indent=2,
             sort_keys=True,
@@ -653,6 +875,15 @@ def apply_llm_relationship_judgments(
                 "path": summary_path.name,
                 "format": "json",
                 "kind": "llm_judgment_apply_summary",
+                **_private_llm_sidecar_metadata(),
+            },
+            {
+                "path": materialized_path.name,
+                "format": "parquet",
+                "kind": "llm_materialized_relationships",
+                "schema_version": DEFAULT_LLM_OUTPUT_SCHEMA_VERSION,
+                "recipe_version": recipe.recipe_version,
+                **_private_llm_sidecar_metadata(),
             }
         ],
     )
@@ -661,14 +892,17 @@ def apply_llm_relationship_judgments(
         manifest_path=manifest_path,
         decisions_path=decisions_path,
         relationship_count=relationship_frame.height,
-        eligible_decision_count=len(eligible_by_pair),
-        applied_count=applied_count,
-        unchanged_count=unchanged_count,
+        eligible_decision_count=sum(
+            1 for gate_decision in gate_decisions if gate_decision["eligible"]
+        ),
+        applied_count=len(materialized_rows),
+        unchanged_count=relationship_frame.height,
+        materialized_path=materialized_path,
         summary_path=summary_path,
     )
 
 
-def _ensure_manifest_sidecars(manifest_path: Path, *, entries: list[dict[str, str]]) -> None:
+def _ensure_manifest_sidecars(manifest_path: Path, *, entries: list[dict[str, Any]]) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     files = manifest["files"]
     by_path = {str(entry["path"]): entry for entry in files}

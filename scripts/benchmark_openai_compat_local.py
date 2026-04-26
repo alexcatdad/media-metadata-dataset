@@ -16,6 +16,8 @@ RELATIONSHIP_LABELS = {
     "special_related",
     "sequel_prequel",
     "remake_reboot",
+    "franchise_related",
+    "adaptation_related",
     "unrelated",
     "uncertain",
 }
@@ -106,6 +108,8 @@ Relationship rules:
 - special_related: one entry is a SPECIAL and the other is the main TV/OVA/ONA entry from the same franchise.
 - sequel_prequel: direct continuation or earlier/later installment of the same adaptation line.
 - remake_reboot: alternate adaptation, reboot, retelling, or different adaptation line of the same core work.
+- franchise_related: same broad franchise when movie, special, sequel/prequel, remake, or adaptation labels are not justified.
+- adaptation_related: cross-medium adaptation of the same core work.
 - unrelated: similar words, tags, genres, or vibes are not enough; use this when they are different works.
 - uncertain: only if the provided evidence is genuinely insufficient.
 
@@ -143,6 +147,8 @@ def response_json_schema() -> dict[str, Any]:
                         "special_related",
                         "sequel_prequel",
                         "remake_reboot",
+                        "franchise_related",
+                        "adaptation_related",
                         "unrelated",
                         "uncertain",
                     ],

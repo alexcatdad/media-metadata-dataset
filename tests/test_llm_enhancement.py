@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from media_offline_database.cli import app
 from media_offline_database.llm_enhancement import (
     LlmExecutionResult,
+    apply_llm_relationship_judgments,
     build_relationship_judgment_prompt,
     execute_llm_relationship_candidates,
     load_llm_candidates,
@@ -62,6 +63,7 @@ def _write_manifest(
     stem: str,
     relationship: str,
     relationship_confidence_score: float,
+    source_role: str = "BACKBONE_SOURCE",
 ) -> Path:
     base_dir.mkdir(parents=True, exist_ok=True)
     entities_path = base_dir / f"{stem}-entities.parquet"
@@ -74,7 +76,7 @@ def _write_manifest(
                 "entity_id": "anime:one",
                 "domain": "anime",
                 "canonical_source": "https://example.com/anime/one",
-                "source_role": "BACKBONE_SOURCE",
+                "source_role": source_role,
                 "record_source": "fixture",
                 "title": "Made in Abyss",
                 "original_title": "メイドインアビス",
@@ -94,7 +96,7 @@ def _write_manifest(
                 "entity_id": "anime:two",
                 "domain": "anime",
                 "canonical_source": "https://example.com/anime/two",
-                "source_role": "BACKBONE_SOURCE",
+                "source_role": source_role,
                 "record_source": "fixture",
                 "title": "Made in Abyss Movie 3",
                 "original_title": None,
@@ -180,6 +182,20 @@ def test_select_llm_relationship_candidates_marks_changes_against_previous(tmp_p
     assert candidate.cache_key.startswith("llm_judgment:")
 
 
+def test_select_llm_relationship_candidates_skips_private_only_inputs(tmp_path: Path) -> None:
+    manifest_path = _write_manifest(
+        tmp_path / "current",
+        stem="current",
+        relationship="related_anime",
+        relationship_confidence_score=0.42,
+        source_role="LOCAL_EVIDENCE",
+    )
+
+    candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
+
+    assert candidates == []
+
+
 def test_write_llm_candidate_plan_updates_manifest(tmp_path: Path) -> None:
     manifest_path = _write_manifest(
         tmp_path / "current",
@@ -198,9 +214,15 @@ def test_write_llm_candidate_plan_updates_manifest(tmp_path: Path) -> None:
     assert plan.candidates_path.exists()
     assert plan.summary_path.exists()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    file_kinds = {entry["kind"] for entry in manifest["files"]}
+    files = manifest["files"]
+    file_kinds = {entry["kind"] for entry in files}
     assert "llm_judgment_candidates" in file_kinds
     assert "llm_judgment_summary" in file_kinds
+    candidate_entry = next(
+        entry for entry in files if entry["kind"] == "llm_judgment_candidates"
+    )
+    assert candidate_entry["public"] is False
+    assert candidate_entry["publishability_status"] == "private_experiment_only"
 
 
 def test_execute_llm_relationship_candidates_writes_decisions(tmp_path: Path) -> None:
@@ -245,9 +267,106 @@ def test_execute_llm_relationship_candidates_writes_decisions(tmp_path: Path) ->
     assert decisions[0]["status"] == "ok"
     assert decisions[0]["judgment"]["relationship"] == "sequel"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    file_kinds = {entry["kind"] for entry in manifest["files"]}
+    files = manifest["files"]
+    file_kinds = {entry["kind"] for entry in files}
     assert "llm_judgment_decisions" in file_kinds
     assert "llm_judgment_execution_summary" in file_kinds
+    decision_entry = next(entry for entry in files if entry["kind"] == "llm_judgment_decisions")
+    assert decision_entry["public"] is False
+    assert decision_entry["publishability_status"] == "private_experiment_only"
+
+
+def test_apply_llm_relationship_judgments_materializes_without_rewriting_core(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_manifest(
+        tmp_path / "current",
+        stem="current",
+        relationship="related_anime",
+        relationship_confidence_score=0.42,
+    )
+    candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
+    plan = write_llm_candidate_plan(manifest_path=manifest_path, candidates=candidates)
+    fake_client = FakeClient(
+        [
+            json.dumps(
+                {
+                    "relationship": "sequel",
+                    "confidence": 0.91,
+                    "reasoning": "The movie continues the same adaptation line.",
+                }
+            )
+        ]
+    )
+    execution = execute_llm_relationship_candidates(
+        candidates_path=plan.candidates_path,
+        manifest_path=manifest_path,
+        api_key="test",
+        base_url="https://example.invalid/v1",
+        client=fake_client,  # type: ignore[arg-type]
+    )
+    relationship_path = manifest_path.parent / "current-relationships.parquet"
+
+    result = apply_llm_relationship_judgments(
+        manifest_path=manifest_path,
+        decisions_path=execution.decisions_path,
+        min_confidence=0.8,
+    )
+
+    core_rows = pl.read_parquet(relationship_path).to_dicts()
+    materialized_rows = pl.read_parquet(result.materialized_path).to_dicts()
+    assert core_rows[0]["relationship_type"] == "related_anime"
+    assert materialized_rows[0]["relationship_type"] == "sequel"
+    assert materialized_rows[0]["materialization_recipe_version"] == "relationship-materialization-v1"
+    assert materialized_rows[0]["judgment_id"].startswith("llm_judgment:")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    materialized_entry = next(
+        entry for entry in manifest["files"] if entry["kind"] == "llm_materialized_relationships"
+    )
+    assert materialized_entry["public"] is False
+    assert materialized_entry["publishability_status"] == "private_experiment_only"
+
+
+def test_apply_llm_relationship_judgments_blocks_low_confidence(
+    tmp_path: Path,
+) -> None:
+    manifest_path = _write_manifest(
+        tmp_path / "current",
+        stem="current",
+        relationship="related_anime",
+        relationship_confidence_score=0.42,
+    )
+    candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
+    plan = write_llm_candidate_plan(manifest_path=manifest_path, candidates=candidates)
+    fake_client = FakeClient(
+        [
+            json.dumps(
+                {
+                    "relationship": "sequel",
+                    "confidence": 0.42,
+                    "reasoning": "Weak evidence.",
+                }
+            )
+        ]
+    )
+    execution = execute_llm_relationship_candidates(
+        candidates_path=plan.candidates_path,
+        manifest_path=manifest_path,
+        api_key="test",
+        base_url="https://example.invalid/v1",
+        client=fake_client,  # type: ignore[arg-type]
+    )
+
+    result = apply_llm_relationship_judgments(
+        manifest_path=manifest_path,
+        decisions_path=execution.decisions_path,
+        min_confidence=0.8,
+    )
+
+    assert result.applied_count == 0
+    summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+    assert summary["gate_decisions"][0]["eligible"] is False
+    assert "confidence_below_recipe_minimum" in summary["gate_decisions"][0]["reasons"]
 
 
 def test_build_relationship_judgment_prompt_mentions_current_relationship(tmp_path: Path) -> None:

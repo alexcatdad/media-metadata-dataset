@@ -16,6 +16,8 @@ RELATIONSHIP_LABELS = {
     "special_related",
     "sequel_prequel",
     "remake_reboot",
+    "franchise_related",
+    "adaptation_related",
     "unrelated",
     "uncertain",
 }
@@ -97,6 +99,8 @@ def response_json_schema() -> dict[str, Any]:
                     "special_related",
                     "sequel_prequel",
                     "remake_reboot",
+                    "franchise_related",
+                    "adaptation_related",
                     "unrelated",
                     "uncertain",
                 ],
