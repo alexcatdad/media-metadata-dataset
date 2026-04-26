@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,13 @@ import polars as pl
 from pydantic import BaseModel, ConfigDict, Field
 
 from media_offline_database.artifacts import artifact_manifest_metadata
+from media_offline_database.publishability import (
+    ArtifactInput,
+    PublishableUse,
+    SourceFieldReference,
+    publishability_manifest_payload,
+    validate_artifact_inputs,
+)
 from media_offline_database.relationships import (
     RELATIONSHIP_RECIPE_VERSION,
     inverse_relationship,
@@ -170,10 +178,48 @@ def bootstrap_relationships_frame(entities: list[BootstrapEntity]) -> pl.DataFra
     )
 
 
-def write_bootstrap_corpus_artifact(*, input_path: Path, output_dir: Path) -> Path:
+def write_bootstrap_corpus_artifact(
+    *,
+    input_path: Path,
+    output_dir: Path,
+    policy_inputs: Sequence[ArtifactInput] | None = None,
+) -> Path:
     entities = load_bootstrap_entities(input_path)
     entity_frame = bootstrap_entities_frame(entities)
     relationship_frame = bootstrap_relationships_frame(entities)
+    default_policy_inputs = [
+        *[
+            ArtifactInput(
+                artifact="bootstrap-corpus",
+                table="entities",
+                column=column,
+                source_fields=[
+                    SourceFieldReference(
+                        source_id="bootstrap_seed",
+                        field_name=("sources" if column == "field_sources_json" else column),
+                    )
+                ],
+                use=PublishableUse.PUBLIC_PARQUET,
+            )
+            for column in entity_frame.columns
+        ],
+        *[
+            ArtifactInput(
+                artifact="bootstrap-corpus",
+                table="relationships",
+                column=column,
+                source_fields=[
+                    SourceFieldReference(
+                        source_id="bootstrap_seed",
+                        field_name=column,
+                    )
+                ],
+                use=PublishableUse.PUBLIC_PARQUET,
+            )
+            for column in relationship_frame.columns
+        ],
+    ]
+    validation = validate_artifact_inputs(policy_inputs or default_policy_inputs)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     entities_path = output_dir / f"{input_path.stem}-entities.parquet"
@@ -193,6 +239,13 @@ def write_bootstrap_corpus_artifact(*, input_path: Path, output_dir: Path) -> Pa
         "entity_row_count": entity_frame.height,
         "relationship_row_count": relationship_frame.height,
         "domains": sorted(entity_frame.get_column("domain").unique().to_list()),
+        "publishability": publishability_manifest_payload(
+            [
+                *validation.validated_uses,
+                PublishableUse.PUBLIC_MANIFEST,
+            ],
+            input_count=validation.input_count,
+        ),
         "files": [
             {
                 "path": entities_path.name,

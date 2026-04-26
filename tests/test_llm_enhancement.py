@@ -16,6 +16,7 @@ from media_offline_database.llm_enhancement import (
     select_llm_relationship_candidates,
     write_llm_candidate_plan,
 )
+from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
 
 runner = CliRunner()
 
@@ -131,6 +132,10 @@ def _write_manifest(
         json.dumps(
             {
                 "artifact": "bootstrap-corpus",
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=2,
+                ),
                 "files": [
                     {"path": entities_path.name, "kind": "entities"},
                     {"path": relationships_path.name, "kind": "relationships"},

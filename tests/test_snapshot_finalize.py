@@ -6,6 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from media_offline_database.cli import app
+from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.snapshot_finalize import (
     materialize_current_snapshot,
@@ -76,6 +77,10 @@ def _write_manifest_bundle(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "artifact": "bootstrap-corpus",
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=2,
+                ),
                 "files": [
                     {"path": entities_path.name, "kind": "entities"},
                     {"path": relationships_path.name, "kind": "relationships"},

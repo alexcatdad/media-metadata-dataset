@@ -8,6 +8,13 @@ from typing import Any
 import polars as pl
 
 from media_offline_database import __version__
+from media_offline_database.publishability import (
+    ArtifactInput,
+    PublishableUse,
+    SourceFieldReference,
+    publishability_manifest_payload,
+    validate_artifact_inputs,
+)
 
 ARTIFACT_MANIFEST_SCHEMA = "media-offline-dataset.artifact-manifest"
 ARTIFACT_MANIFEST_SCHEMA_VERSION = 1
@@ -41,12 +48,33 @@ def write_keyless_smoke_artifact(output_dir: Path) -> Path:
             "source_role": ["BACKBONE_SOURCE", "BACKBONE_SOURCE", "ID_SOURCE"],
         }
     )
+    validation = validate_artifact_inputs(
+        [
+            ArtifactInput(
+                artifact="keyless-smoke",
+                table="entities",
+                column=column,
+                source_fields=[
+                    SourceFieldReference(source_id="bootstrap_seed", field_name=column)
+                ],
+                use=PublishableUse.PUBLIC_PARQUET,
+            )
+            for column in frame.columns
+        ]
+    )
     frame.write_parquet(dataset_path, compression="zstd")
 
     manifest: dict[str, Any] = {
         **artifact_manifest_metadata(
             artifact="keyless-smoke",
             build_stage="keyless-smoke",
+        ),
+        "publishability": publishability_manifest_payload(
+            [
+                *validation.validated_uses,
+                PublishableUse.PUBLIC_MANIFEST,
+            ],
+            input_count=validation.input_count,
         ),
         "row_count": frame.height,
         "files": [

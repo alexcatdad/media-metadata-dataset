@@ -15,6 +15,12 @@ from media_offline_database.modeling import (
     model_cache_key,
     stable_json,
 )
+from media_offline_database.publishability import (
+    PublishableUse,
+    SourceFieldReference,
+    validate_manifest_publishability,
+    validate_text_inputs,
+)
 
 DEFAULT_LLM_PROVIDER = "openrouter"
 DEFAULT_LLM_MODEL = "inclusionai/ling-2.6-flash:free"
@@ -108,6 +114,7 @@ class OpenAiClientLike(Protocol):
 
 def _manifest_files(manifest_path: Path) -> dict[str, Path]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_manifest_publishability(manifest)
     return {file["kind"]: manifest_path.parent / file["path"] for file in manifest["files"]}
 
 
@@ -328,6 +335,24 @@ def write_llm_candidate_plan(
 
 
 def build_relationship_judgment_prompt(candidate: LlmRelationshipCandidate) -> str:
+    validate_text_inputs(
+        [
+            SourceFieldReference(source_id="bootstrap_seed", field_name="title"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="original_title"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="media_type"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="release_year"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="genres"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="studios"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="creators"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship_confidence"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="supporting_urls"),
+        ],
+        artifact="llm-judgment",
+        table="llm_judgments",
+        column="prompt",
+        use=PublishableUse.LLM_JUDGMENT_INPUT,
+    )
     payload = {
         "source": {
             "entity_id": candidate.source_entity_id,
