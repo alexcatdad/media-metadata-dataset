@@ -730,7 +730,7 @@ def llm_apply_judgments(
         ),
     ] = 0.8,
 ) -> None:
-    """Apply successful LLM relationship judgments back into the relationship artifact."""
+    """Materialize eligible LLM relationship judgments into a derived sidecar."""
 
     result = apply_llm_relationship_judgments(
         decisions_path=decisions_path,
