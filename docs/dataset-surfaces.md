@@ -174,6 +174,33 @@ Compatibility tiers:
 - `derived`: recipe-versioned and recomputable; breaking changes allowed with manifest notices.
 - `experimental`: no compatibility guarantee; must be clearly marked as experimental or unstable.
 
+## Entity Identity Contract
+
+Entity IDs are durable within a dataset line. Once an `entity_id` is published, it must not be
+reused for a different conceptual work. Downstream consumers should be able to store IDs, join
+against them, and resolve older IDs forward through explicit identity-change metadata.
+
+Normal identity corrections should be modeled rather than hidden:
+
+- If two published entities are later found to be the same work, keep one canonical entity ID and
+  redirect or merge the other ID into it.
+- If one published entity is later found to contain multiple works, keep the old ID as deprecated or
+  ambiguous and mint new canonical IDs for the split works.
+- If an entity was published in error, do not reuse its ID. Mark it as deprecated, withdrawn, or
+  superseded with an explicit reason.
+- Preserve identity-change history so consumers can migrate older references.
+
+The artifact contract should include an identity-change surface or manifest-linked table for merges,
+splits, redirects, deprecations, withdrawals, and supersessions. Identity changes should include old
+ID, new ID or IDs where applicable, change type, evidence or reason, effective snapshot, and
+provenance.
+
+ID stability applies within a valid dataset line. If implementation work or later evidence shows
+that the identity model or core premise is fundamentally broken, the project may start a new dataset
+line, repository, or version family instead of forcing compatibility with the broken premise. The
+old dataset line should remain published for existing consumers, while new development moves to the
+corrected line.
+
 ## Tags, Facets, And Judgments
 
 The dataset should keep source tags, normalized facets, and inferred judgments separate.
