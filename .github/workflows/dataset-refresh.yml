@@ -241,6 +241,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p .mod/out/dataset-refresh
 
           cmd=(
             docker run --rm
