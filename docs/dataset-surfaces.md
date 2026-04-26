@@ -226,6 +226,28 @@ Field-level provenance is not required by default. It should be reserved for exc
 debug, or conflict-resolution surfaces where the extra complexity has clear value. The default
 artifact contract is row-level lightweight references plus separate provenance/evidence tables.
 
+Confidence should not be represented as one universal normalized score. Different claims need
+different confidence context: a title match, relationship type, normalized facet, LLM judgment,
+identity merge, and embedding-derived candidate are not directly comparable.
+
+Confidence should be dimensional and recipe-specific. Core tables may expose a compact
+`confidence_tier`, such as `high`, `medium`, `low`, or `unknown`, but that tier must be produced by
+an explicit recipe and should not pretend to be mathematically comparable across all surfaces.
+
+Useful confidence dimensions include:
+
+- `source_role`: the classified role of the source that contributed the claim.
+- `evidence_strength`: whether the claim is direct, source-declared, multi-source, derived, or
+  inferred.
+- `agreement_status`: whether evidence is confirmed, conflicting, ambiguous, or unverified.
+- `extraction_method`: direct source field, deterministic rule, model judgment, or manual
+  correction.
+- `freshness_status`: whether the supporting source snapshot is current, stale, or unknown.
+- `quality_flags`: machine-readable warnings such as title conflict, date conflict, low evidence,
+  model inferred, or needs more evidence.
+- `recipe_version`: the confidence recipe, prompt, or rule version that produced the tier or
+  dimensional profile.
+
 ## Tags, Facets, And Judgments
 
 The dataset should keep source tags, normalized facets, and inferred judgments separate.
