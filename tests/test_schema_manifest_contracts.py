@@ -167,6 +167,7 @@ def test_core_table_contracts_cover_required_public_surfaces() -> None:
         "facets",
         "judgments",
         "provenance",
+        "source_records",
     }
 
     assert required_tables <= CORE_TABLE_CONTRACTS.keys()

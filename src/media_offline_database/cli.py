@@ -54,6 +54,7 @@ from media_offline_database.snapshot_finalize import (
     publish_current_snapshot,
 )
 from media_offline_database.sources import SourceRole
+from media_offline_database.v1_artifact import DEFAULT_V1_OUTPUT_DIR, write_v1_core_artifact
 
 app = typer.Typer(help="Media Offline Database dataset compiler.")
 console = Console()
@@ -271,6 +272,24 @@ WikidataMovieQidOption = Annotated[
     typer.Option(
         "--qid",
         help="Wikidata movie QID to include. May be passed more than once.",
+    ),
+]
+V1CoreInputPathOption = Annotated[
+    list[Path],
+    typer.Option(
+        "--input-path",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Bootstrap-like JSONL seed to include in the v1 core/profile artifact. May be passed more than once.",
+    ),
+]
+V1CoreOutputDirOption = Annotated[
+    Path,
+    typer.Option(
+        "--output-dir",
+        help="Directory where the v1 core/profile artifact should be written.",
     ),
 ]
 HfRepoIdOption = Annotated[
@@ -564,6 +583,20 @@ def wikidata_movie_build(
             "manifest": str(result.manifest_path),
         }
     )
+
+
+@app.command()
+def v1_core_artifact(
+    input_path: V1CoreInputPathOption,
+    output_dir: V1CoreOutputDirOption = DEFAULT_V1_OUTPUT_DIR,
+) -> None:
+    """Compile bootstrap-like seeds into v1 shared core and profile tables."""
+
+    manifest_path = write_v1_core_artifact(
+        input_paths=input_path,
+        output_dir=output_dir,
+    )
+    console.print({"manifest": str(manifest_path)})
 
 
 @app.command()

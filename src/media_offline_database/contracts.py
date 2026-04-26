@@ -302,6 +302,24 @@ CORE_TABLE_CONTRACTS: dict[str, TableContract] = {
             column("policy_version", "string", nullable=False),
         ),
     ),
+    "source_records": TableContract(
+        table_name="source_records",
+        schema_version=CORE_SCHEMA_VERSION,
+        compatibility_tier=CompatibilityTier.CORE,
+        columns=(
+            column("source_record_ref_id", "string", nullable=False),
+            column("entity_id", "string", nullable=False),
+            column("source_id", "string", nullable=False),
+            column("source_record_id", "string", nullable=False),
+            column("source_snapshot_id", "string"),
+            column("provider_run_id", "string"),
+            column("source_role", "string", nullable=False),
+            column("source_url", "string"),
+            column("source_record_hash", "string"),
+            column("provenance_id", "string"),
+            column("recipe_version", "string", nullable=False),
+        ),
+    ),
 }
 
 
