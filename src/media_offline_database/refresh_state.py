@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 REFRESH_STATE_SCHEMA = "media-offline-dataset.refresh-state"
 REFRESH_STATE_SCHEMA_VERSION = 1
@@ -20,10 +20,12 @@ class RefreshJobState(BaseModel):
 
     source_name: str
     snapshot_id: str
+    source_snapshot_id: str
     status: Literal["in_progress", "completed"]
     batch_size: int
     completed_count: int
     next_offset: int
+    offset_basis: Literal["source_order"] = "source_order"
     last_completed_item_key: str | None = None
     last_checkpoint_path: str | None = None
     published_snapshot_path: str | None = None
@@ -32,6 +34,16 @@ class RefreshJobState(BaseModel):
     current_snapshot_manifest_path: str | None = None
     finalized_at: str | None = None
     updated_at: str = Field(default_factory=_utc_now)
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_source_snapshot_id(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        mutable: dict[str, Any] = dict(cast(dict[str, Any], data))
+        if "source_snapshot_id" not in mutable and isinstance(mutable.get("snapshot_id"), str):
+            mutable["source_snapshot_id"] = mutable["snapshot_id"]
+        return mutable
 
 
 class RefreshState(BaseModel):
@@ -75,6 +87,7 @@ def record_refresh_progress(
     job_name: str,
     source_name: str,
     snapshot_id: str,
+    source_snapshot_id: str | None = None,
     batch_size: int,
     completed_count: int,
     next_offset: int,
@@ -85,6 +98,7 @@ def record_refresh_progress(
     state.jobs[job_name] = RefreshJobState(
         source_name=source_name,
         snapshot_id=snapshot_id,
+        source_snapshot_id=source_snapshot_id or snapshot_id,
         status=status,
         batch_size=batch_size,
         completed_count=completed_count,
@@ -110,6 +124,7 @@ def record_refresh_finalization(
         state.jobs[job_name] = RefreshJobState(
             source_name="finalize",
             snapshot_id=snapshot_id,
+            source_snapshot_id=snapshot_id,
             status="completed",
             batch_size=0,
             completed_count=0,
@@ -125,6 +140,7 @@ def record_refresh_finalization(
     state.jobs[job_name] = existing.model_copy(
         update={
             "snapshot_id": snapshot_id,
+            "source_snapshot_id": existing.source_snapshot_id,
             "status": "completed",
             "published_snapshot_path": snapshot_path,
             "published_snapshot_manifest_path": snapshot_manifest_path,

@@ -54,6 +54,10 @@ The manifest should record the Hugging Face repo ID, full commit SHA, branch or 
 publish, artifact paths, schema versions, source snapshot IDs, recipe versions, row counts,
 published timestamp, and compatibility notes.
 
+Publication tooling records Hugging Face revision identity under a `huggingface` manifest object:
+`repo_id`, `commit_sha`, `revision`, and optional `revision_tag`. `revision` is the full commit SHA
+for exact pinning. Tags are supported release aliases, not exact identity replacements.
+
 Do not duplicate every historical snapshot as dated folders on `main`. The current branch should
 contain the current Parquet tables and current manifest; Hugging Face Git history, tags, and commit
 SHAs provide older snapshot identities.
@@ -173,6 +177,11 @@ Compatibility tiers:
   allowed with explicit version bumps and manifest notices.
 - `derived`: recipe-versioned and recomputable; breaking changes allowed with manifest notices.
 - `experimental`: no compatibility guarantee; must be clearly marked as experimental or unstable.
+
+Snapshot compatibility validation compares manifests before release. Core table removal or core
+major-schema movement is an error. Profile and derived version movement is reported as a warning so
+the manifest or release notes can declare the change. Experimental surfaces are reported
+informationally and carry no compatibility guarantee.
 
 ## Entity Identity Contract
 
