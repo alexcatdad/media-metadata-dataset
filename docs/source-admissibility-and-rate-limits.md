@@ -1,10 +1,20 @@
 # Source Admissibility And Rate Limits
 
-Last reviewed: 2026-04-25.
+Last reviewed: 2026-04-26.
 
 This project is non-commercial and fully open, but that does not make every API response
 redistributable. A provider can be useful for local evidence while still being unsafe for the
 published dataset.
+
+The providers we use are doing valuable work by collecting, maintaining, and exposing media
+information. This project should treat provider access as a responsibility: public access,
+credentials, or API tokens authorize a way to read data, but they do not by themselves authorize
+redistribution, bulk mirroring, publication of copied fields, or use beyond the provider's terms.
+Every existing and new provider needs explicit terms-of-service, license, attribution,
+redistribution, cache, and rate-limit review before its data shapes published artifacts.
+
+See [`runbooks/provider-review.md`](runbooks/provider-review.md) for the repeatable provider review
+workflow.
 
 ## Source Roles
 
@@ -27,6 +37,11 @@ Free access does not automatically grant redistribution rights. Provider role an
 control what can be published. Paid or contract access is allowed for private experiments and
 non-published local evidence only unless a later decision log entry records rights evidence and
 explicitly approves its use in canonical artifacts.
+
+The intended dataset value is collation, normalization, provenance, relationship modeling, and
+retrieval-ready structure across scattered admissible sources. It is not a claim that provider work
+is incomplete or replaceable, and it is not a reason to exceed provider access, cache, attribution,
+or redistribution terms.
 
 ## Execution Boundary
 
@@ -75,6 +90,11 @@ must run inside Docker and obey provider caps.
 ## Access and Auth Matrix
 
 This table is about how we access a provider, not whether its data is redistributable.
+Provider access is not provider clearance. Many providers are publicly reachable, and some are
+available to this project through tokens or registered clients, but every existing and newly added
+provider still needs explicit terms and redistribution review before its data can shape published
+artifacts. Record review date, evidence links, source role, and permitted published use; do not treat
+credentials, public endpoints, or local access as redistribution rights.
 
 | Source | Read access mode for this project | Current env / credential shape | Notes |
 |---|---|---|---|
