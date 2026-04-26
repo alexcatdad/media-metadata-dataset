@@ -33,13 +33,17 @@ The backlog is append-friendly JSONL. Each line is one object with:
 4. Prefer dependencies over overloaded task descriptions.
 5. Add a decision log entry when the backlog introduces a new project-management convention or
    changes a major implementation direction.
-6. Run the backlog and docs validation tests inside Docker:
+6. During parallel lane work, do not let every lane independently claim the next numeric decision ID
+   or rewrite shared adjacent JSONL rows. Assign one coordinator to do the final rebase, decision ID
+   renumbering, and `decision_refs` updates before merge. If this becomes routine, split authoring
+   into per-record files and generate JSONL as the consumption artifact.
+7. Run the backlog and docs validation tests inside Docker:
 
 ```sh
 docker compose run --rm app uv run pytest tests/test_backlog.py tests/test_decision_log.py tests/test_docs_policy.py
 ```
 
-7. Commit and push the backlog update.
+8. Commit and push the backlog update.
 
 ## Lane Guidance
 
@@ -51,4 +55,3 @@ docker compose run --rm app uv run pytest tests/test_backlog.py tests/test_decis
 - `publication-refresh`: Hugging Face publish, tags, snapshots, refresh state.
 - `docs-decisions`: docs, examples, dataset card, decision capture.
 - `derived-similarity`: post-v1 similarity candidate recipes.
-

@@ -61,3 +61,7 @@ gh pr comment <number> --body-file /tmp/review.md
 - Cite file paths, lines, backlog IDs, decision IDs, or check failures.
 - Do not make unrelated edits while reviewing unless the user asks for fixes.
 - Do not approve a PR with failing required checks.
+- Treat conflicts in `docs/decisions.jsonl` and `docs/backlog.jsonl` as coordination work, not as
+  evidence that the implementation is wrong. When the user asks you to take over conflict-only PRs,
+  rebase on current `main`, assign monotonically ordered unique decision IDs, update the matching
+  backlog `decision_refs`, run the container validation gates, and push the resolved branch.

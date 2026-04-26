@@ -18,6 +18,10 @@ decision is recorded in `docs/decisions.jsonl`.
   new accepted decision.
 - Credentials do not imply redistribution rights.
 - Use JSONL for append-only decisions.
+- Treat dense JSONL files such as `docs/decisions.jsonl` and `docs/backlog.jsonl` as coordinated
+  merge surfaces during parallel work. Do not ask multiple agents to independently choose the next
+  numeric decision ID or rewrite adjacent backlog rows. A single coordinator should do the final
+  rebase, renumbering, backlog-reference update, validation, and push for those files.
 
 ## Tooling
 
@@ -41,5 +45,8 @@ Review flow:
   review because the PR author is the same account, post the same feedback as a regular PR comment.
 - Do not fix the PR during review unless explicitly asked; the PR-owning agent should receive clear
   instructions instead.
+- When taking over conflict-only PRs, prefer rebasing onto current `main`, preserving the branch's
+  substantive code changes, and serializing decision/backlog JSONL edits so IDs remain monotonically
+  ordered and unique.
 
 See `docs/runbooks/pr-review.md` for the command workflow.
