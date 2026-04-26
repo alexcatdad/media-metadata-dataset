@@ -71,8 +71,10 @@ def _tier_for_file(file_entry: dict[str, Any]) -> CompatibilityTier:
     kind = str(file_entry.get("kind", ""))
     if kind.endswith("_profile") or "profile" in kind:
         return "profile"
-    if kind.startswith("llm-") or kind in {"relationships", "entities"}:
+    if kind in {"relationships", "entities"}:
         return "core"
+    if kind.startswith(("llm-", "llm_")) or "judgment" in kind or "materialized" in kind:
+        return "derived"
     return "experimental"
 
 
