@@ -389,8 +389,11 @@ def build_relationship_judgment_prompt(candidate: LlmRelationshipCandidate) -> s
             SourceFieldReference(source_id="bootstrap_seed", field_name="genres"),
             SourceFieldReference(source_id="bootstrap_seed", field_name="studios"),
             SourceFieldReference(source_id="bootstrap_seed", field_name="creators"),
-            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship"),
-            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship_confidence"),
+            SourceFieldReference(source_id="bootstrap_seed", field_name="relationship_type"),
+            SourceFieldReference(
+                source_id="bootstrap_seed",
+                field_name="relationship_confidence_score",
+            ),
             SourceFieldReference(source_id="bootstrap_seed", field_name="supporting_urls"),
         ],
         artifact="llm-judgment",
