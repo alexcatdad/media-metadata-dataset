@@ -174,6 +174,30 @@ paired edges where useful. For example, `adaptation_of` and `adapted_by` should 
 into one ambiguous label if direction can be known. Generic families are acceptable for grouping and
 fallback, but they should not replace precise types when evidence supports a richer edge.
 
+## Vibes And Soft Similarity
+
+`Vibes` are consumer-side interpretation, not a deterministic dataset field. A user may describe a
+desired feeling in normal prose, such as "adult university romance with a real ending" or "large
+scope political space sci-fi." The external application may use an LLM to interpret that prose and
+then run RAG, vector search, graph traversal, filters, or a blended ranking strategy against the
+dataset.
+
+This project should not store one canonical `vibe` answer or decide the final ranking for such
+queries. Its responsibility is to expose enough structured and retrieval-ready information for
+consumer systems to build those interpretations:
+
+- normalized facets;
+- rich relationships and relationship evidence;
+- source tags where publishable;
+- retrieval text;
+- embeddings;
+- judgments and materialized inferred facets where approved;
+- provenance and confidence metadata.
+
+The dataset can support vibe-like discovery by making these surfaces complete, explainable, and
+queryable. The LLM interpretation of a user's prose query, the RAG prompt, the ranking policy, and
+the final recommendation presentation belong to the consuming system.
+
 ## Post-V1 Surface: Similarity Candidates
 
 `similarity_candidates` is a post-v1 progressive enhancement. It should not block the v1 dataset,
