@@ -6,10 +6,10 @@ cast = __import__("typing").cast
 FIXTURE_PATH = Path("benchmarks/fixtures/anime-chat-judgment-v1.jsonl")
 RELATIONSHIP_LABELS = {
     "same_entity",
-    "movie_related",
-    "special_related",
-    "sequel_prequel",
-    "remake_reboot",
+    "movie_tie_in",
+    "special",
+    "sequel",
+    "alternate_adaptation",
     "unrelated",
     "uncertain",
 }
@@ -56,9 +56,9 @@ def test_fixture_corpus_includes_varied_relationship_types() -> None:
 
     assert {
         "same_entity",
-        "movie_related",
-        "special_related",
-        "sequel_prequel",
-        "remake_reboot",
+        "movie_tie_in",
+        "special",
+        "sequel",
+        "alternate_adaptation",
         "unrelated",
     } <= relationships

@@ -84,12 +84,12 @@ def test_llm_judgment_schema_is_strict() -> None:
 
 def test_llm_relationship_judgment_schema_is_strict() -> None:
     judgment = LlmRelationshipJudgment(
-        relationship=RelationshipLabel.SEQUEL_PREQUEL,
+        relationship=RelationshipLabel.SEQUEL,
         confidence=0.73,
         reasoning="The movie is a direct continuation of the same adaptation line.",
     )
 
-    assert judgment.relationship == RelationshipLabel.SEQUEL_PREQUEL
+    assert judgment.relationship == RelationshipLabel.SEQUEL
     with pytest.raises(ValidationError):
         LlmRelationshipJudgment.model_validate(
             {

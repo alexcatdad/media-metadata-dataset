@@ -114,7 +114,7 @@ def test_build_manami_anime_artifact_runs_full_pipeline(tmp_path: Path) -> None:
 
     assert normalized_entities[0].related[0].relationship == "related_anime"
     assert len(relation_entities[0].related) == 1
-    assert relation_entities[0].related[0].relationship == "sequel_prequel"
+    assert relation_entities[0].related[0].relationship == "sequel"
     assert relation_entities[0].related[0].target == "anime:manami:anidb:14177"
     assert relation_entities[0].related[0].supporting_urls == [
         "https://anidb.net/anime/14177",

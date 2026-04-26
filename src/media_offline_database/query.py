@@ -278,11 +278,14 @@ def _load_entities_from_manifest(manifest_path: Path) -> list[BootstrapEntity]:
         source_entity = entities.get(row["source_entity_id"])
         if source_entity is None:
             continue
+        relationship_value = row.get("relationship_type", row.get("relationship"))
+        if relationship_value is None:
+            continue
 
         source_entity.related.append(
             BootstrapRelatedEdge(
                 target=row["target_entity_id"],
-                relationship=row["relationship"],
+                relationship=str(relationship_value),
                 target_url=row["target_url"],
                 supporting_urls=list(row["supporting_urls"] or []),
             )

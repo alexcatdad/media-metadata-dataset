@@ -12,6 +12,7 @@ from media_offline_database.bootstrap import (
     load_bootstrap_entities,
 )
 from media_offline_database.ingest_manami import parse_manami_source_ref
+from media_offline_database.relationships import deterministic_anilist_relationship_recipe
 
 _ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
 _ANILIST_RELATIONS_QUERY = """
@@ -30,9 +31,6 @@ query ($id: Int!) {
   }
 }
 """
-_SPECIAL_FORMATS = {"SPECIAL", "OVA", "ONA", "TV_SHORT"}
-
-
 class AniListRelatedNode(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -255,19 +253,11 @@ def write_anilist_relation_enriched_seed(
 
 
 def classify_anilist_relationship(*, relation_type: str, target_format: str | None) -> str:
-    if relation_type in {"SEQUEL", "PREQUEL"}:
-        return "sequel_prequel"
-
-    if relation_type == "ALTERNATIVE":
-        return "remake_reboot"
-
-    if relation_type in {"SUMMARY", "COMPILATION"}:
-        return _format_aware_relationship(target_format, fallback="related_anime")
-
-    if relation_type in {"PARENT", "SIDE_STORY", "CONTAINS"}:
-        return _format_aware_relationship(target_format, fallback="related_anime")
-
-    return "related_anime"
+    recipe_result = deterministic_anilist_relationship_recipe(
+        relation_type=relation_type,
+        target_format=target_format,
+    )
+    return recipe_result.relationship or "related_anime"
 
 
 def _extract_anilist_id(entity: BootstrapEntity) -> int | None:
@@ -291,16 +281,6 @@ def _extract_anilist_url(entity: BootstrapEntity) -> str | None:
         return url
 
     return None
-
-
-def _format_aware_relationship(target_format: str | None, *, fallback: str) -> str:
-    if target_format == "MOVIE":
-        return "movie_related"
-
-    if target_format in _SPECIAL_FORMATS:
-        return "special_related"
-
-    return fallback
 
 
 def _edge_supporting_urls(edge: BootstrapRelatedEdge) -> list[str]:

@@ -42,7 +42,7 @@ def test_designated_survivor_artifact_round_trips_through_duckdb(tmp_path: Path)
 
     rows = duckdb.sql(
         """
-        select source_entity_id, relationship, target_entity_id, relationship_confidence
+        select source_entity_id, relationship_type, target_entity_id, relationship_confidence_score
         from read_parquet(?)
         order by source_entity_id, target_entity_id
         """,

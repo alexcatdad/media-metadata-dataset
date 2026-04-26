@@ -9,7 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from media_offline_database.artifacts import artifact_manifest_metadata
 from media_offline_database.relationships import (
-    relationship_confidence,
+    RELATIONSHIP_RECIPE_VERSION,
+    inverse_relationship,
+    relationship_confidence_score,
+    relationship_confidence_score_profile_json,
+    relationship_confidence_score_tier,
+    relationship_direction,
+    relationship_evidence_id,
+    relationship_family,
+    relationship_id,
+    relationship_quality_flags,
     supporting_provider_count,
     supporting_source_count,
 )
@@ -103,27 +112,60 @@ def bootstrap_relationships_frame(entities: list[BootstrapEntity]) -> pl.DataFra
     return pl.DataFrame(
         [
             {
+                "relationship_id": relationship_id(
+                    source_entity_id=entity.entity_id,
+                    target_entity_id=edge.target,
+                    relationship=edge.relationship,
+                ),
                 "source_entity_id": entity.entity_id,
                 "target_entity_id": edge.target,
-                "relationship": edge.relationship,
+                "relationship_type": edge.relationship,
+                "relationship_family": relationship_family(edge.relationship),
+                "direction": relationship_direction(edge.relationship),
+                "inverse_relationship_type": inverse_relationship(edge.relationship),
+                "confidence_tier": relationship_confidence_score_tier(edge),
+                "evidence_count": supporting_source_count(edge),
+                "conflict_status": "none",
+                "quality_flags": relationship_quality_flags(edge),
+                "evidence_id": relationship_evidence_id(
+                    source_entity_id=entity.entity_id,
+                    target_entity_id=edge.target,
+                    relationship=edge.relationship,
+                    supporting_urls=edge.supporting_urls or [edge.target_url],
+                ),
+                "provenance_id": None,
+                "recipe_version": RELATIONSHIP_RECIPE_VERSION,
                 "target_url": edge.target_url,
                 "supporting_urls": edge.supporting_urls or [edge.target_url],
                 "supporting_source_count": supporting_source_count(edge),
                 "supporting_provider_count": supporting_provider_count(edge),
-                "relationship_confidence": relationship_confidence(edge),
+                "relationship_confidence_score": relationship_confidence_score(edge),
+                "confidence_profile_json": relationship_confidence_score_profile_json(edge),
             }
             for entity in entities
             for edge in entity.related
         ],
         schema={
+            "relationship_id": pl.String,
             "source_entity_id": pl.String,
             "target_entity_id": pl.String,
-            "relationship": pl.String,
+            "relationship_type": pl.String,
+            "relationship_family": pl.String,
+            "direction": pl.String,
+            "inverse_relationship_type": pl.String,
+            "confidence_tier": pl.String,
+            "evidence_count": pl.Int64,
+            "conflict_status": pl.String,
+            "quality_flags": pl.List(pl.String),
+            "evidence_id": pl.String,
+            "provenance_id": pl.String,
+            "recipe_version": pl.String,
             "target_url": pl.String,
             "supporting_urls": pl.List(pl.String),
             "supporting_source_count": pl.Int64,
             "supporting_provider_count": pl.Int64,
-            "relationship_confidence": pl.Float64,
+            "relationship_confidence_score": pl.Float64,
+            "confidence_profile_json": pl.String,
         },
     )
 
