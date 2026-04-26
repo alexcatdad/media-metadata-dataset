@@ -38,7 +38,7 @@ def test_death_note_artifact_round_trips_with_adaptation_edges(tmp_path: Path) -
 
     rows = duckdb.sql(
         """
-        select source_entity_id, relationship, target_entity_id, relationship_confidence
+        select source_entity_id, relationship, target_entity_id, relationship_confidence_score
         from read_parquet(?)
         order by source_entity_id, relationship, target_entity_id
         """,

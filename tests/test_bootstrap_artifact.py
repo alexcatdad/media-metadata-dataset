@@ -64,7 +64,7 @@ def test_bootstrap_artifact_round_trips_through_duckdb(tmp_path: Path) -> None:
     relationship_sample = duckdb.sql(
         """
         select source_entity_id, relationship, target_entity_id, supporting_urls,
-               supporting_source_count, supporting_provider_count, relationship_confidence
+               supporting_source_count, supporting_provider_count, relationship_confidence_score
         from read_parquet(?)
         order by source_entity_id, relationship, target_entity_id
         limit 3
@@ -154,10 +154,32 @@ def test_bootstrap_frames_split_entities_and_relationships() -> None:
         "source_entity_id",
         "target_entity_id",
         "relationship",
+        "relationship_family",
+        "relationship_direction",
+        "inverse_relationship",
         "target_url",
         "supporting_urls",
+        "evidence_id",
+        "provenance_id",
         "supporting_source_count",
         "supporting_provider_count",
-        "relationship_confidence",
+        "relationship_confidence_score",
+        "confidence_tier",
+        "confidence_profile_json",
+        "quality_flags",
+        "recipe_version",
     ]
     assert relationship_frame.height == 21
+    assert relationship_frame.select(
+        [
+            "relationship_family",
+            "relationship_direction",
+            "confidence_tier",
+            "recipe_version",
+        ]
+    ).row(0) == (
+        "episode_context",
+        "unknown",
+        "medium",
+        "relationship-taxonomy-v1",
+    )

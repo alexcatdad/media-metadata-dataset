@@ -43,12 +43,12 @@ class LlmRelationshipCandidate(BaseModel):
     target_studios: list[str] = Field(default_factory=list)
     source_creators: list[str] = Field(default_factory=list)
     target_creators: list[str] = Field(default_factory=list)
-    relationship_confidence: float
+    relationship_confidence_score: float
     supporting_source_count: int
     supporting_provider_count: int
     supporting_urls: list[str] = Field(default_factory=list)
     previous_relationship: str | None = None
-    previous_relationship_confidence: float | None = None
+    previous_relationship_confidence_score: float | None = None
     changed_since_previous: bool = False
     input_fingerprint: str
     cache_key: str
@@ -167,16 +167,16 @@ def _normalized_candidate_input(
         },
         "relationship": {
             "current": relationship_row["relationship"],
-            "confidence": relationship_row["relationship_confidence"],
+            "confidence_score": relationship_row["relationship_confidence_score"],
             "supporting_source_count": relationship_row["supporting_source_count"],
             "supporting_provider_count": relationship_row["supporting_provider_count"],
             "supporting_urls": list(relationship_row.get("supporting_urls") or []),
             "previous": {
                 "relationship": None if previous_row is None else previous_row["relationship"],
-                "confidence": (
+                "confidence_score": (
                     None
                     if previous_row is None
-                    else previous_row["relationship_confidence"]
+                    else previous_row["relationship_confidence_score"]
                 ),
             },
         },
@@ -197,7 +197,7 @@ def select_llm_relationship_candidates(
     candidates: list[LlmRelationshipCandidate] = []
 
     for relationship_row in _load_relationship_rows(manifest_path):
-        if float(relationship_row["relationship_confidence"]) >= confidence_threshold and str(
+        if float(relationship_row["relationship_confidence_score"]) >= confidence_threshold and str(
             relationship_row["relationship"]
         ) != "related_anime":
             continue
@@ -224,8 +224,8 @@ def select_llm_relationship_candidates(
 
         changed_since_previous = previous_row is None or (
             previous_row["relationship"] != relationship_row["relationship"]
-            or float(previous_row["relationship_confidence"])
-            != float(relationship_row["relationship_confidence"])
+            or float(previous_row["relationship_confidence_score"])
+            != float(relationship_row["relationship_confidence_score"])
         )
 
         candidates.append(
@@ -253,17 +253,17 @@ def select_llm_relationship_candidates(
                 target_studios=list(target_row.get("studios") or []),
                 source_creators=list(source_row.get("creators") or []),
                 target_creators=list(target_row.get("creators") or []),
-                relationship_confidence=float(relationship_row["relationship_confidence"]),
+                relationship_confidence_score=float(relationship_row["relationship_confidence_score"]),
                 supporting_source_count=int(relationship_row["supporting_source_count"]),
                 supporting_provider_count=int(relationship_row["supporting_provider_count"]),
                 supporting_urls=list(relationship_row.get("supporting_urls") or []),
                 previous_relationship=(
                     None if previous_row is None else str(previous_row["relationship"])
                 ),
-                previous_relationship_confidence=(
+                previous_relationship_confidence_score=(
                     None
                     if previous_row is None
-                    else float(previous_row["relationship_confidence"])
+                    else float(previous_row["relationship_confidence_score"])
                 ),
                 changed_since_previous=changed_since_previous,
                 input_fingerprint=input_fingerprint,
@@ -273,7 +273,7 @@ def select_llm_relationship_candidates(
 
     candidates.sort(
         key=lambda item: (
-            item.relationship_confidence,
+            item.relationship_confidence_score,
             -item.supporting_provider_count,
             item.source_entity_id,
             item.target_entity_id,
@@ -352,9 +352,9 @@ def build_relationship_judgment_prompt(candidate: LlmRelationshipCandidate) -> s
             "creators": candidate.target_creators,
         },
         "current_relationship": candidate.relationship,
-        "current_confidence": candidate.relationship_confidence,
+        "current_confidence_score": candidate.relationship_confidence_score,
         "previous_relationship": candidate.previous_relationship,
-        "previous_confidence": candidate.previous_relationship_confidence,
+        "previous_confidence_score": candidate.previous_relationship_confidence_score,
         "supporting_source_count": candidate.supporting_source_count,
         "supporting_provider_count": candidate.supporting_provider_count,
         "supporting_urls": candidate.supporting_urls,
@@ -364,19 +364,19 @@ You judge whether two media entities have the correct relationship label.
 
 Return only a JSON object with this exact shape:
 {{
-  "relationship": "same_entity" | "movie_related" | "special_related" | "sequel_prequel" | "remake_reboot" | "franchise_related" | "adaptation_related" | "unrelated" | "uncertain",
+  "relationship": "same_entity" | "sequel" | "prequel" | "continuation" | "spinoff" | "side_story" | "special" | "recap" | "compilation" | "movie_tie_in" | "remake" | "reboot" | "retelling" | "alternate_adaptation" | "adaptation_of" | "adapted_by" | "source_material" | "same_franchise" | "shared_universe" | "similar_to" | "unrelated" | "uncertain",
   "confidence": number,
   "reasoning": string
 }}
 
 Rules:
 - same_entity is strict: same work, same release, same core record.
-- movie_related needs an actual MOVIE/non-MOVIE pairing in the same franchise.
-- special_related needs an actual SPECIAL/main-entry pairing.
-- sequel_prequel is for direct continuation or earlier/later installment in the same adaptation line.
-- remake_reboot is for alternate adaptation lines, reboots, or retellings of the same core work.
-- franchise_related is broader same-franchise connection when a tighter label is not justified.
-- adaptation_related is for cross-medium adaptations of the same core work.
+- sequel and prequel preserve direction from source entity to target entity.
+- movie_tie_in needs an actual MOVIE/non-MOVIE pairing in the same franchise.
+- special, recap, compilation, and side_story are episode-context labels, not broad franchise labels.
+- remake, reboot, retelling, and alternate_adaptation require evidence of a distinct version line.
+- adaptation_of and adapted_by preserve cross-medium source/adaptation direction.
+- same_franchise and shared_universe are broad labels only when a tighter label is not justified.
 - unrelated means shared words, broad genres, or vibes are not enough.
 - uncertain only if the evidence is genuinely insufficient.
 
@@ -588,14 +588,14 @@ def apply_llm_relationship_judgments(
         new_confidence = float(decision.judgment.confidence)
         if (
             str(row_dict["relationship"]) == new_relationship
-            and float(row_dict["relationship_confidence"]) == new_confidence
+            and float(row_dict["relationship_confidence_score"]) == new_confidence
         ):
             unchanged_count += 1
             updated_rows.append(row_dict)
             continue
 
         row_dict["relationship"] = new_relationship
-        row_dict["relationship_confidence"] = new_confidence
+        row_dict["relationship_confidence_score"] = new_confidence
         updated_rows.append(row_dict)
         applied_count += 1
 

@@ -60,7 +60,7 @@ def _write_manifest(
     *,
     stem: str,
     relationship: str,
-    relationship_confidence: float,
+    relationship_confidence_score: float,
 ) -> Path:
     base_dir.mkdir(parents=True, exist_ok=True)
     entities_path = base_dir / f"{stem}-entities.parquet"
@@ -122,7 +122,7 @@ def _write_manifest(
                 "supporting_urls": ["https://example.com/anime/two"],
                 "supporting_source_count": 1,
                 "supporting_provider_count": 1,
-                "relationship_confidence": relationship_confidence,
+                "relationship_confidence_score": relationship_confidence_score,
             }
         ]
     ).write_parquet(relationships_path)
@@ -150,13 +150,13 @@ def test_select_llm_relationship_candidates_marks_changes_against_previous(tmp_p
         tmp_path / "previous",
         stem="previous",
         relationship="related_anime",
-        relationship_confidence=0.35,
+        relationship_confidence_score=0.35,
     )
     current_manifest = _write_manifest(
         tmp_path / "current",
         stem="current",
         relationship="sequel_prequel",
-        relationship_confidence=0.61,
+        relationship_confidence_score=0.61,
     )
 
     candidates = select_llm_relationship_candidates(
@@ -180,7 +180,7 @@ def test_write_llm_candidate_plan_updates_manifest(tmp_path: Path) -> None:
         tmp_path / "current",
         stem="current",
         relationship="related_anime",
-        relationship_confidence=0.42,
+        relationship_confidence_score=0.42,
     )
     candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
 
@@ -203,7 +203,7 @@ def test_execute_llm_relationship_candidates_writes_decisions(tmp_path: Path) ->
         tmp_path / "current",
         stem="current",
         relationship="related_anime",
-        relationship_confidence=0.42,
+        relationship_confidence_score=0.42,
     )
     candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
     plan = write_llm_candidate_plan(
@@ -214,7 +214,7 @@ def test_execute_llm_relationship_candidates_writes_decisions(tmp_path: Path) ->
         [
             json.dumps(
                 {
-                    "relationship": "sequel_prequel",
+                    "relationship": "sequel",
                     "confidence": 0.81,
                     "reasoning": "The movie is presented as the next installment in the same line.",
                 }
@@ -238,7 +238,7 @@ def test_execute_llm_relationship_candidates_writes_decisions(tmp_path: Path) ->
         if line.strip()
     ]
     assert decisions[0]["status"] == "ok"
-    assert decisions[0]["judgment"]["relationship"] == "sequel_prequel"
+    assert decisions[0]["judgment"]["relationship"] == "sequel"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     file_kinds = {entry["kind"] for entry in manifest["files"]}
     assert "llm_judgment_decisions" in file_kinds
@@ -250,7 +250,7 @@ def test_build_relationship_judgment_prompt_mentions_current_relationship(tmp_pa
         tmp_path / "current",
         stem="current",
         relationship="related_anime",
-        relationship_confidence=0.42,
+        relationship_confidence_score=0.42,
     )
     candidate = select_llm_relationship_candidates(manifest_path=manifest_path)[0]
 
@@ -266,7 +266,7 @@ def test_llm_prepare_candidates_cli_writes_sidecars(tmp_path: Path) -> None:
         tmp_path / "current",
         stem="current",
         relationship="related_anime",
-        relationship_confidence=0.42,
+        relationship_confidence_score=0.42,
     )
 
     result = runner.invoke(
@@ -292,7 +292,7 @@ def test_llm_execute_candidates_cli_runs_with_settings_env(
         tmp_path / "current",
         stem="current",
         relationship="related_anime",
-        relationship_confidence=0.42,
+        relationship_confidence_score=0.42,
     )
     candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
     plan = write_llm_candidate_plan(manifest_path=manifest_path, candidates=candidates)
@@ -352,7 +352,7 @@ def test_load_llm_candidates_round_trips_plan_file(tmp_path: Path) -> None:
         tmp_path / "current",
         stem="current",
         relationship="related_anime",
-        relationship_confidence=0.42,
+        relationship_confidence_score=0.42,
     )
     candidates = select_llm_relationship_candidates(manifest_path=manifest_path)
     plan = write_llm_candidate_plan(manifest_path=manifest_path, candidates=candidates)

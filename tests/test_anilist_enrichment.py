@@ -17,23 +17,23 @@ from media_offline_database.sources import SourceRole
 def test_classify_anilist_relationship_maps_core_relation_types() -> None:
     assert (
         classify_anilist_relationship(relation_type="SEQUEL", target_format="TV")
-        == "sequel_prequel"
+        == "sequel"
     )
     assert (
         classify_anilist_relationship(relation_type="PREQUEL", target_format="MOVIE")
-        == "sequel_prequel"
+        == "prequel"
     )
     assert (
         classify_anilist_relationship(relation_type="ALTERNATIVE", target_format="TV")
-        == "remake_reboot"
+        == "related_anime"
     )
     assert (
         classify_anilist_relationship(relation_type="SUMMARY", target_format="MOVIE")
-        == "movie_related"
+        == "recap"
     )
     assert (
         classify_anilist_relationship(relation_type="SIDE_STORY", target_format="OVA")
-        == "special_related"
+        == "side_story"
     )
     assert (
         classify_anilist_relationship(relation_type="SOURCE", target_format=None)
@@ -100,8 +100,8 @@ def test_enrich_bootstrap_entities_with_anilist_relations_retypes_matching_edges
     )
 
     assert [edge.relationship for edge in enriched[0].related] == [
-        "movie_related",
-        "sequel_prequel",
+        "recap",
+        "sequel",
     ]
     assert enriched[0].related[0].supporting_urls == [
         "https://anilist.co/anime/101343",
@@ -225,7 +225,7 @@ def test_write_anilist_relation_enriched_seed_writes_jsonl(tmp_path: Path) -> No
     ]
 
     assert written_path == output_path
-    assert payload[0]["related"][0]["relationship"] == "remake_reboot"
+    assert payload[0]["related"][0]["relationship"] == "related_anime"
     assert payload[0]["related"][0]["supporting_urls"] == [
         "https://anidb.net/anime/777",
         "https://anilist.co/anime/270",
