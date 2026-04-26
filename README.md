@@ -14,6 +14,8 @@ See [`docs/schema-documentation.md`](docs/schema-documentation.md) for contribut
 guidance, [`docs/hugging-face-dataset-card-plan.md`](docs/hugging-face-dataset-card-plan.md) for
 the dataset card plan, and [`docs/consumer-examples.md`](docs/consumer-examples.md) for file-based
 consumer examples.
+See [`docs/source-signal-showcases.md`](docs/source-signal-showcases.md) for examples of noisy or
+sparse provider signals the dataset is intended to normalize.
 Downstream-consumer personas:
 [`John`](docs/personas/john-downstream-app-developer.md) and
 [`Alex`](docs/personas/alex-anime-discovery.md).

@@ -283,6 +283,8 @@ The dataset should keep source tags, normalized facets, and inferred judgments s
 
 `source_tags` are provider-supplied labels or lightly normalized source labels. They preserve where
 the label came from and should not be treated as the dataset's final taxonomy by themselves.
+Provider tags may be broad, sparse, misspelled, or overly specific to one record. They are evidence
+inputs for normalization, not proof that a canonical facet or similarity axis exists.
 
 `facets` are normalized, queryable dataset attributes. They are designed for downstream search and
 filtering, such as `educational_setting=university`, `cast_life_stage=adult`, or
@@ -296,6 +298,9 @@ deterministic review.
 Inferred values must live in a judgment table first. They may later be normalized or materialized
 into facets only through explicit materialization rules, confidence thresholds, provenance links,
 and recipe versions. This keeps queryable facets useful without hiding which values were inferred.
+
+Source signal showcases in [`source-signal-showcases.md`](source-signal-showcases.md) document cases
+where raw provider fields are useful evidence but not sufficient as durable taxonomy.
 
 ## LLM Judgment Boundary
 

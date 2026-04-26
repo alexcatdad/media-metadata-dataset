@@ -59,6 +59,11 @@ quality. Downstream tools need a durable, source-aware dataset that makes those 
 relationships available for their own query, retrieval, recommendation, or application layers
 without reconstructing the graph from scratch every time.
 
+Some provider signals are also noisy or underpowered for discovery on their own: keywords can be
+too broad, typo-prone, sparse, or over-specific, and provider recommendation lists can mix useful
+neighbors with generic genre overlap. See [`source-signal-showcases.md`](source-signal-showcases.md)
+for concrete examples that motivate normalized facets, evidence, and derived judgments.
+
 ## Success Shape
 
 A successful version of this project publishes data that lets a downstream tool, outside this repo,
