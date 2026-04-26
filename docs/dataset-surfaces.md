@@ -248,6 +248,21 @@ Useful confidence dimensions include:
 - `recipe_version`: the confidence recipe, prompt, or rule version that produced the tier or
   dimensional profile.
 
+## Publishability Controls
+
+Published artifacts must be written through a publishability policy layer. Source roles describe
+which providers can participate in the project, but field-level policy and artifact policy decide
+what may appear in public Parquet tables and manifests.
+
+Core tables should be shaped only from fields whose source policy permits the intended published
+use, plus derived outputs whose transform recipe is allowed to consume those inputs. Restricted or
+local-only sources may support matching, QA, or confidence decisions, but their restricted values
+must not leak into public tables, retrieval text, embeddings, judgments, or manifests.
+
+The manifest should record policy versions for source policy, field policy, artifact policy, and
+publishability validation. This policy can evolve over time, but the artifact writer should treat
+publishability failures as release blockers.
+
 ## Tags, Facets, And Judgments
 
 The dataset should keep source tags, normalized facets, and inferred judgments separate.

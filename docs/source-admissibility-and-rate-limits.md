@@ -26,6 +26,37 @@ workflow.
   not shape public artifacts without a later accepted decision documenting redistribution rights.
 - `BLOCKED`: do not integrate without direct permission or a better license path.
 
+## Publishability Policy Layer
+
+Source roles are not enough by themselves. Publication safety also depends on which fields are used,
+how they are transformed, and which artifact receives the output.
+
+The pipeline should enforce publishability before writing public artifacts:
+
+- Every source has a reviewed `source_policy` with role, license or terms evidence, attribution
+  requirements, cache limits, review date, and policy version.
+- Every ingested source field has a `source_field_policy` describing publishability, allowed uses,
+  attribution requirements, and retention rules.
+- Every transform declares which publishability classes it may consume.
+- Every artifact writer validates that published columns only use allowed inputs.
+- Restricted sources can help local matching, QA, or confidence decisions only when their
+  restricted values cannot leak into public Parquet tables, retrieval text, embeddings, judgments,
+  or manifests.
+- Retrieval text and embeddings need extra scrutiny because they can encode blocked source text even
+  when the original field is not copied directly.
+
+Suggested policy surfaces:
+
+- `source_policy`: source role, license URL, terms URL, attribution requirement, reviewed timestamp,
+  policy version, and notes.
+- `source_field_policy`: source ID, field name, publishability class, allowed uses, attribution
+  requirement, and retention policy.
+- `artifact_policy`: table, column, allowed input publishability classes, policy version, and
+  validation rule.
+
+Source access is not publication permission. Credentials, API tokens, registered clients, public
+endpoints, and local availability never imply redistribution rights.
+
 ## Free-Access Reproducibility
 
 Canonical published pipelines should prefer open bulk downloads, public free tiers, and free/open
