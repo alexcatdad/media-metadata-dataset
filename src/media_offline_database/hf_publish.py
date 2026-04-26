@@ -9,6 +9,7 @@ from huggingface_hub import HfApi, hf_hub_download  # pyright: ignore[reportUnkn
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
 from pydantic import BaseModel, ConfigDict
 
+from media_offline_database.publishability import validate_current_manifest_publishability
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
@@ -108,6 +109,7 @@ def resolve_hf_repo_id(
 
 def build_publish_bundle(manifest_path: Path) -> PublishBundle:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_current_manifest_publishability(manifest)
     local_dir = manifest_path.parent
     allow_patterns = [manifest_path.name]
     for file_entry in manifest["files"]:
