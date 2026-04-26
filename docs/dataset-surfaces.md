@@ -283,6 +283,34 @@ Inferred values must live in a judgment table first. They may later be normalize
 into facets only through explicit materialization rules, confidence thresholds, provenance links,
 and recipe versions. This keeps queryable facets useful without hiding which values were inferred.
 
+## LLM Judgment Boundary
+
+LLM outputs are derived judgments, not source metadata. They should not write directly into
+canonical entities, titles, external IDs, source facts, profile fields, facets, or relationship
+edges.
+
+Allowed direct LLM destinations:
+
+- `llm_judgments`
+- `judgment_candidates`
+- `conflict_flags`
+- benchmark and evaluation artifacts
+- retrieval-text segments only when generated from publishable inputs and recipe-versioned
+
+LLM-derived values can become queryable data only through a versioned materialization recipe. Before
+materialization, the pipeline must validate that:
+
+- all inputs were allowed by publishability policy;
+- provider, model, prompt, parameters, and recipe versions are recorded;
+- output is structured and schema-valid;
+- evidence or input references are retained;
+- a confidence profile or tier is produced by the materialization recipe;
+- quality flags are attached where relevant;
+- the target surface is explicitly allowed for that materialization recipe.
+
+Invalid, failed, low-confidence, or unsupported judgments should remain in judgment artifacts and
+must not materialize into queryable core, profile, relationship, or facet data.
+
 ## Relationship Taxonomy
 
 Relationships are a core value of the dataset. A small or overly generic taxonomy would collapse the
