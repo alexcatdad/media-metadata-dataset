@@ -17,7 +17,7 @@ V1 should focus on stable, reusable surfaces:
 - `retrieval_text`: safe, provenance-aware text assembled for search, embeddings, and RAG indexing.
 - `embeddings`: recipe-versioned vectors for supported retrieval text or facet bundles.
 - `llm_judgments`: auditable model-assisted judgments for ambiguous cases.
-- `provenance`: source, field, fetch, and transformation metadata.
+- `provenance`: separate joinable source, fetch, policy, and transformation metadata.
 - `manifest`: artifact files, row counts, schema versions, recipe versions, and snapshot metadata.
 
 These surfaces should be useful even when some enrichment stages are incomplete.
@@ -200,6 +200,31 @@ that the identity model or core premise is fundamentally broken, the project may
 line, repository, or version family instead of forcing compatibility with the broken premise. The
 old dataset line should remain published for existing consumers, while new development moves to the
 corrected line.
+
+## Provenance, Evidence, And Confidence
+
+Provenance should be available as separate joinable artifact surfaces, not inline field-level
+metadata by default. Core consumption tables should stay clean and should expose practical trust
+signals such as confidence, evidence count, conflict status, quality flags, evidence IDs, provenance
+IDs, and recipe versions.
+
+The intended consumer-facing signal is usually confidence or evidence quality, not a full source
+lineage trail. A downstream application can decide whether `confidence`, `evidence_count`,
+`conflict_status`, or `quality_flags` are enough for its UI, and can join into provenance or
+evidence tables only when it needs audit or debugging detail.
+
+Examples of separate supporting surfaces:
+
+- `source_records`
+- `source_snapshots`
+- `provider_runs`
+- `evidence`
+- `provenance`
+- `recipe_runs`
+
+Field-level provenance is not required by default. It should be reserved for exceptional audit,
+debug, or conflict-resolution surfaces where the extra complexity has clear value. The default
+artifact contract is row-level lightweight references plus separate provenance/evidence tables.
 
 ## Tags, Facets, And Judgments
 
