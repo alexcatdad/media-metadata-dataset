@@ -168,6 +168,19 @@ def test_resolve_hf_repo_id_prefers_explicit_then_settings_then_whoami() -> None
         token="hf_test",
     ) == "alecatdad/media-metadata-dataset"
 
+    empty_var_settings = Settings.model_validate(
+        {
+            "HF_TOKEN": "hf_test",
+            "HF_NAMESPACE": "",
+            "HF_DATASET_REPO": "",
+        }
+    )
+    assert resolve_hf_repo_id(
+        settings=empty_var_settings,
+        api=fake_api,
+        token="hf_test",
+    ) == "alecatdad/media-metadata-dataset"
+
 
 def test_publish_checkpoint_bundle_uploads_artifact_and_state(tmp_path: Path) -> None:
     fake_api = FakeHfApi()

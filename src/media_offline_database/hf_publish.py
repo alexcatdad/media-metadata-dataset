@@ -94,7 +94,7 @@ def resolve_hf_repo_id(
         return repo_id
 
     repo_name = settings.hf_dataset_repo or "media-metadata-dataset"
-    namespace = settings.hf_namespace
+    namespace = settings.hf_namespace or None
     if namespace is None:
         if api is None:
             resolved_api: HfApiLike = cast(HfApiLike, HfApi())
