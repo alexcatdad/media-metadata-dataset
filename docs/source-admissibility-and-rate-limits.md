@@ -174,6 +174,28 @@ credentials, public endpoints, or local access as redistribution rights.
 | OMDb | `LOCAL_EVIDENCE` / `RUNTIME_ONLY` | IMDb-keyed lookup only; no copied index | Free key page lists 1,000 daily limit | 1,000 req/day | [API key page](https://www.omdbapi.com/apikey.aspx), [legal](https://www.omdbapi.com/legal.htm) |
 | JustWatch | `RUNTIME_ONLY` | Availability/offers only at runtime or with partner agreement | Partner token required; branded links/attribution; no public scrape path | 60 req/min | [partner API](https://apis.justwatch.com/docs/api/), [terms](https://support.justwatch.com/hc/en-us/articles/9567105189405-JustWatch-s-Terms-of-Use) |
 
+## V1 Source Path Plan
+
+The v1 source path plan is locked around one meaningful source path per first-class domain:
+
+| Domain | Source path | Role | Publishable-field path | Status | Evidence |
+|---|---|---|---|---|---|
+| anime | manami anime-offline-database release assets | `BACKBONE_SOURCE` | Release-backed anime titles, crossrefs, related anime, type, episodes, season, status, and tags subject to field policy. | Locked. | [README/license](https://github.com/manami-project/anime-offline-database) |
+| TV | TVmaze show path | `BACKBONE_SOURCE` | TVmaze IDs, URLs, titles, status, dates, runtime, genres, network/web channel, and TV profile fields allowed by CC BY-SA field and artifact policy. | Waiting on source policy, field policy, artifact policy, and shared core/profile schema fixtures. | [TVmaze API](https://www.tvmaze.com/api) |
+| movie | Wikidata movie graph | `BACKBONE_SOURCE` | Wikidata QIDs, labels, aliases, publication dates, broad movie type facts, external IDs, adaptation links, and franchise links under CC0 policy. | Waiting on source policy, field policy, artifact policy, and shared core/profile schema fixtures. | [Wikidata licensing](https://www.wikidata.org/wiki/Wikidata:Licensing) |
+
+Anime TV series and anime movies are not counted as the required TV or movie source paths. TMDB may
+join the movie path as `ID_SOURCE` evidence only after field policy identifies which daily export
+fields can be published. TMDB API, IMDb datasets, OMDb, Trakt, Simkl, TheTVDB, and JustWatch remain
+local-evidence, runtime, ID-only, or blocked according to their current source roles; restricted
+fields from those sources must not appear in public Parquet, retrieval text, embeddings, judgments,
+or manifests.
+
+TVmaze summary HTML is explicitly not part of the initial publishable TV field path. It needs a
+separate field-policy decision before any copied text, retrieval text, or embedding input uses it.
+
+See [`runbooks/ingest-normalization.md`](runbooks/ingest-normalization.md) for the lane runbook.
+
 ## Model Inference Policy
 
 LLM and embedding providers are also source-like dependencies. Canonical runs should use free/open

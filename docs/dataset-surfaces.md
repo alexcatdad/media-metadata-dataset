@@ -222,6 +222,20 @@ Examples of separate supporting surfaces:
 - `provenance`
 - `recipe_runs`
 
+Source snapshot surfaces should use one normalized contract across adapters:
+
+- `source_snapshots`: source ID, source role, snapshot kind, source/fetch timestamps, fetch window,
+  policy versions, record counts, content hash, and manifest URI where applicable.
+- `provider_runs`: adapter name/version, source ID, optional source snapshot ID, timestamps,
+  request/cache counts, status, auth shape, and secret name references only.
+- `source_records`: source record ID, source snapshot ID or provider run ID, source role,
+  provisional source-path field class, optional source URL, and optional source record hash.
+
+Every ingested row should be able to join to a source snapshot or provider run. Provider run records
+must not expose secret values, tokens, authorization headers, or copied restricted payload fields.
+The provisional source-path field class is a planning hint only and must be replaced by the shared
+field-policy contract before public artifact writing.
+
 Field-level provenance is not required by default. It should be reserved for exceptional audit,
 debug, or conflict-resolution surfaces where the extra complexity has clear value. The default
 artifact contract is row-level lightweight references plus separate provenance/evidence tables.
