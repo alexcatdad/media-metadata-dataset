@@ -193,8 +193,17 @@ Current commands:
 ```sh
 docker compose run --rm app mod hf-state --repo-id namespace/media-metadata-dataset-test
 docker compose run --rm app mod hf-publish /path/to/manifest.json --repo-id namespace/media-metadata-dataset-test
+docker compose run --rm app mod hf-publish /path/to/manifest.json \
+  --repo-id namespace/media-metadata-dataset-test \
+  --release-tag v0.1.0
 docker compose run --rm app mod manami-refresh \
   --input-path /path/to/anime-offline-database.json \
   --repo-id namespace/media-metadata-dataset-test \
   --batch-size 100
+docker compose run --rm app mod validate-snapshot-compatibility \
+  /path/to/previous-manifest.json \
+  /path/to/current-manifest.json
 ```
+
+See [publication-refresh.md](docs/runbooks/publication-refresh.md) for the containerized publish,
+tag, compatibility, and refresh-continuity workflow.

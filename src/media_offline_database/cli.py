@@ -40,6 +40,7 @@ from media_offline_database.llm_enhancement import (
 from media_offline_database.query import build_query_preview, load_query_entities
 from media_offline_database.refresh import run_manami_refresh_checkpoint
 from media_offline_database.settings import Settings
+from media_offline_database.snapshot_compatibility import validate_snapshot_compatibility
 from media_offline_database.snapshot_finalize import (
     materialize_current_snapshot,
     publish_current_snapshot,
@@ -262,6 +263,13 @@ CheckpointPathOption = Annotated[
     typer.Option(
         "--checkpoint-path",
         help="Remote dataset path prefix for this artifact bundle.",
+    ),
+]
+ReleaseTagOption = Annotated[
+    str | None,
+    typer.Option(
+        "--release-tag",
+        help="Optional Hugging Face dataset tag to create for this supported snapshot.",
     ),
 ]
 RefreshJobNameOption = Annotated[
@@ -549,6 +557,7 @@ def hf_publish(
     repo_id: HfRepoIdOption = None,
     checkpoint_path: CheckpointPathOption = "checkpoints/manual",
     private: HfPrivateOption = True,
+    release_tag: ReleaseTagOption = None,
 ) -> None:
     """Publish a compiled artifact bundle plus refresh state to a Hugging Face dataset repo."""
 
@@ -575,6 +584,7 @@ def hf_publish(
         checkpoint_path=checkpoint_path,
         state=state,
         private=private,
+        release_tag=release_tag,
     )
     console.print_json(json=result.model_dump_json(indent=2))
 
@@ -614,6 +624,7 @@ def hf_finalize_current(
     job_name: RefreshJobNameOption = "dataset.default",
     repo_id: HfRepoIdOption = None,
     private: HfPrivateOption = True,
+    release_tag: ReleaseTagOption = None,
 ) -> None:
     """Promote one compiled artifact bundle into a stable current snapshot surface on Hugging Face."""
 
@@ -641,8 +652,43 @@ def hf_finalize_current(
         job_name=job_name,
         snapshot_id=snapshot_id,
         private=private,
+        release_tag=release_tag,
     )
     console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command("validate-snapshot-compatibility")
+def validate_snapshot_compatibility_command(
+    previous_manifest_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Previous snapshot manifest to compare from.",
+        ),
+    ],
+    current_manifest_path: Annotated[
+        Path,
+        typer.Argument(
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+            help="Current snapshot manifest to validate.",
+        ),
+    ],
+) -> None:
+    """Compare two snapshot manifests and report compatibility findings."""
+
+    report = validate_snapshot_compatibility(
+        previous_manifest_path=previous_manifest_path,
+        current_manifest_path=current_manifest_path,
+    )
+    console.print_json(json=report.model_dump_json(indent=2))
+    if not report.compatible:
+        raise typer.Exit(code=1)
 
 
 @app.command()

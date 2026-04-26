@@ -8,16 +8,20 @@ from media_offline_database.refresh import run_manami_refresh_checkpoint
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
+COMMIT_SHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 
 class FakeCommitInfo:
-    def __init__(self, commit_url: str | None = None) -> None:
+    def __init__(self, commit_url: str | None = None, oid: str | None = None) -> None:
         self.commit_url = commit_url
+        self.oid = oid
 
 
 class FakeHfApi:
     def __init__(self) -> None:
         self.uploaded_folders: list[dict[str, object]] = []
         self.uploaded_files: list[dict[str, object]] = []
+        self.created_tags: list[dict[str, object]] = []
 
     def create_repo(self, *args: object, **kwargs: object) -> object:
         _ = args, kwargs
@@ -34,11 +38,15 @@ class FakeHfApi:
 
     def upload_folder(self, **kwargs: object) -> FakeCommitInfo:
         self.uploaded_folders.append(dict(kwargs))
-        return FakeCommitInfo("https://huggingface.co/commit/123")
+        return FakeCommitInfo(f"https://huggingface.co/commit/{COMMIT_SHA}", COMMIT_SHA)
 
     def upload_file(self, **kwargs: object) -> FakeCommitInfo:
         self.uploaded_files.append(dict(kwargs))
         return FakeCommitInfo()
+
+    def create_tag(self, **kwargs: object) -> object:
+        self.created_tags.append(dict(kwargs))
+        return object()
 
 
 def test_run_manami_refresh_checkpoint_persists_resume_progress(tmp_path: Path) -> None:
@@ -121,5 +129,34 @@ def test_run_manami_refresh_checkpoint_persists_resume_progress(tmp_path: Path) 
         result.local_state_path.read_text(encoding="utf-8")
     )
     job = local_state.jobs["anime.manami.default"]
+    assert job.source_snapshot_id == result.snapshot_id
+    assert job.offset_basis == "source_order"
     assert job.next_offset == 1
     assert job.completed_count == 1
+
+    state_upload = fake_api.uploaded_files[-1]["path_or_fileobj"]
+    assert isinstance(state_upload, bytes)
+    remote_state = RefreshState.model_validate_json(state_upload.decode("utf-8"))
+
+    resumed_result = run_manami_refresh_checkpoint(
+        release_path=release_path,
+        output_dir=tmp_path / "out-resumed",
+        repo_id="alecatdad/media-metadata-dataset-test",
+        batch_size=1,
+        private_repo=True,
+        settings=settings,
+        api=fake_api,
+        remote_state=remote_state,
+        fetch_relations=lambda _anilist_id: [],
+        fetch_metadata=lambda _anilist_id: AniListResolvedMetadata(
+            genres=["Sci-Fi"],
+            studios=["Sunrise"],
+            creators=["Hajime Yatate"],
+        ),
+    )
+
+    assert resumed_result.start_offset == 1
+    assert resumed_result.end_offset == 2
+    assert resumed_result.next_offset == 2
+    assert resumed_result.status == "completed"
+    assert resumed_result.checkpoint_path.endswith("00000001-00000002")

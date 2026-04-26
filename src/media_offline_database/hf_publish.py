@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from huggingface_hub import HfApi, hf_hub_download  # pyright: ignore[reportUnknownVariableType]
 from huggingface_hub.errors import EntryNotFoundError, RepositoryNotFoundError
@@ -14,11 +15,15 @@ from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
 HF_REFRESH_STATE_PATH = "state/refresh-state.json"
+HF_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class HfCommitInfoLike(Protocol):
     @property
     def commit_url(self) -> str | None: ...
+
+    @property
+    def oid(self) -> str | None: ...
 
 
 class HfApiLike(Protocol):
@@ -63,6 +68,17 @@ class HfApiLike(Protocol):
         commit_message: str | None = None,
     ) -> HfCommitInfoLike | object: ...
 
+    def create_tag(
+        self,
+        *,
+        repo_id: str,
+        tag: str,
+        revision: str | None = None,
+        tag_message: str | None = None,
+        token: str | bool | None = None,
+        repo_type: str | None = None,
+    ) -> object: ...
+
 
 def _hf_whoami(api: HfApiLike, *, token: str | None) -> dict[str, object]:
     return api.whoami(token=token, cache=False)
@@ -74,7 +90,9 @@ class HfPublishResult(BaseModel):
     repo_id: str
     checkpoint_path: str
     state_path: str
+    commit_sha: str | None = None
     commit_url: str | None = None
+    release_tag: str | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +138,80 @@ def build_publish_bundle(manifest_path: Path) -> PublishBundle:
         manifest_path=manifest_path,
         local_dir=local_dir,
         allow_patterns=deduped_patterns,
+    )
+
+
+def extract_hf_commit_sha(commit_info: object) -> str | None:
+    oid = getattr(commit_info, "oid", None)
+    if isinstance(oid, str) and HF_COMMIT_SHA_RE.fullmatch(oid):
+        return oid
+
+    commit_url = getattr(commit_info, "commit_url", None)
+    if not isinstance(commit_url, str):
+        return None
+
+    candidate = commit_url.rstrip("/").rsplit("/", maxsplit=1)[-1]
+    if HF_COMMIT_SHA_RE.fullmatch(candidate):
+        return candidate
+    return None
+
+
+def write_manifest_hf_revision(
+    manifest_path: Path,
+    *,
+    repo_id: str,
+    commit_sha: str,
+    revision_tag: str | None = None,
+) -> None:
+    manifest: dict[str, Any] = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["huggingface"] = {
+        "repo_id": repo_id,
+        "commit_sha": commit_sha,
+        "revision": commit_sha,
+        "revision_tag": revision_tag,
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def validate_manifest_hf_revision(manifest_path: Path) -> None:
+    manifest = cast(
+        dict[str, object],
+        json.loads(manifest_path.read_text(encoding="utf-8")),
+    )
+    hf_revision = manifest.get("huggingface")
+    if not isinstance(hf_revision, dict):
+        raise ValueError("manifest missing huggingface revision metadata")
+
+    hf_revision_data = cast(dict[str, object], hf_revision)
+    repo_id = hf_revision_data.get("repo_id")
+    commit_sha = hf_revision_data.get("commit_sha")
+    revision = hf_revision_data.get("revision")
+    if not isinstance(repo_id, str) or not repo_id:
+        raise ValueError("manifest missing huggingface.repo_id")
+    if not isinstance(commit_sha, str) or not HF_COMMIT_SHA_RE.fullmatch(commit_sha):
+        raise ValueError("manifest missing full huggingface.commit_sha")
+    if revision != commit_sha:
+        raise ValueError("manifest huggingface.revision must equal commit_sha for exact pinning")
+
+
+def create_release_tag(
+    *,
+    api: HfApiLike,
+    token: str,
+    repo_id: str,
+    tag: str,
+    commit_sha: str,
+) -> None:
+    api.create_tag(
+        repo_id=repo_id,
+        tag=tag,
+        revision=commit_sha,
+        tag_message=f"Release snapshot {tag}",
+        token=token,
+        repo_type="dataset",
     )
 
 
@@ -190,6 +282,7 @@ def publish_checkpoint_bundle(
     state: RefreshState,
     private: bool = True,
     write_dataset_card: bool = True,
+    release_tag: str | None = None,
 ) -> HfPublishResult:
     api.create_repo(
         repo_id,
@@ -218,6 +311,31 @@ def publish_checkpoint_bundle(
         repo_type="dataset",
         allow_patterns=bundle.allow_patterns,
     )
+    commit_sha = extract_hf_commit_sha(commit_info)
+    if commit_sha is not None:
+        write_manifest_hf_revision(
+            manifest_path,
+            repo_id=repo_id,
+            commit_sha=commit_sha,
+            revision_tag=release_tag,
+        )
+        api.upload_file(
+            path_or_fileobj=manifest_path,
+            path_in_repo=f"{checkpoint_path}/{manifest_path.name}",
+            repo_id=repo_id,
+            repo_type="dataset",
+            token=token,
+            commit_message=f"Record HF revision for {checkpoint_path}",
+        )
+        validate_manifest_hf_revision(manifest_path)
+        if release_tag is not None:
+            create_release_tag(
+                api=api,
+                token=token,
+                repo_id=repo_id,
+                tag=release_tag,
+                commit_sha=commit_sha,
+            )
 
     state_bytes = (
         json.dumps(state.model_dump(mode="json"), indent=2, sort_keys=True) + "\n"
@@ -236,5 +354,7 @@ def publish_checkpoint_bundle(
         repo_id=repo_id,
         checkpoint_path=checkpoint_path,
         state_path=HF_REFRESH_STATE_PATH,
+        commit_sha=commit_sha,
         commit_url=commit_url,
+        release_tag=release_tag,
     )

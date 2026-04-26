@@ -8,15 +8,19 @@ from media_offline_database.hf_publish import (
     build_publish_bundle,
     publish_checkpoint_bundle,
     resolve_hf_repo_id,
+    validate_manifest_hf_revision,
 )
 from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
 
+COMMIT_SHA = "1234567890abcdef1234567890abcdef12345678"
+
 
 class FakeCommitInfo:
-    def __init__(self, commit_url: str | None = None) -> None:
+    def __init__(self, commit_url: str | None = None, oid: str | None = None) -> None:
         self.commit_url = commit_url
+        self.oid = oid
 
 
 class FakeHfApi:
@@ -24,6 +28,7 @@ class FakeHfApi:
         self.created_repos: list[dict[str, object]] = []
         self.uploaded_folders: list[dict[str, object]] = []
         self.uploaded_files: list[dict[str, object]] = []
+        self.created_tags: list[dict[str, object]] = []
 
     def create_repo(
         self,
@@ -78,7 +83,7 @@ class FakeHfApi:
                 "ignore_patterns": ignore_patterns,
             }
         )
-        return FakeCommitInfo("https://huggingface.co/commit/123")
+        return FakeCommitInfo(f"https://huggingface.co/commit/{COMMIT_SHA}", COMMIT_SHA)
 
     def upload_file(
         self,
@@ -101,6 +106,28 @@ class FakeHfApi:
             }
         )
         return FakeCommitInfo()
+
+    def create_tag(
+        self,
+        *,
+        repo_id: str,
+        tag: str,
+        revision: str | None = None,
+        tag_message: str | None = None,
+        token: str | bool | None = None,
+        repo_type: str | None = None,
+    ) -> object:
+        self.created_tags.append(
+            {
+                "repo_id": repo_id,
+                "tag": tag,
+                "revision": revision,
+                "tag_message": tag_message,
+                "token": token,
+                "repo_type": repo_type,
+            }
+        )
+        return object()
 
 
 def _write_manifest_bundle(tmp_path: Path) -> Path:
@@ -222,8 +249,58 @@ def test_publish_checkpoint_bundle_uploads_artifact_and_state(tmp_path: Path) ->
     ]
     assert [entry["path_in_repo"] for entry in fake_api.uploaded_files] == [
         "README.md",
+        "checkpoints/anime.manami.default/2026-14/00000000-00000100/sample-manifest.json",
         HF_REFRESH_STATE_PATH,
     ]
     assert result.repo_id == "alecatdad/media-metadata-dataset-test"
     assert result.state_path == HF_REFRESH_STATE_PATH
-    assert result.commit_url == "https://huggingface.co/commit/123"
+    assert result.commit_sha == COMMIT_SHA
+    assert result.commit_url == f"https://huggingface.co/commit/{COMMIT_SHA}"
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["huggingface"] == {
+        "commit_sha": COMMIT_SHA,
+        "repo_id": "alecatdad/media-metadata-dataset-test",
+        "revision": COMMIT_SHA,
+        "revision_tag": None,
+    }
+    validate_manifest_hf_revision(manifest_path)
+
+
+def test_publish_checkpoint_bundle_can_create_release_tag(tmp_path: Path) -> None:
+    fake_api = FakeHfApi()
+    manifest_path = _write_manifest_bundle(tmp_path)
+
+    result = publish_checkpoint_bundle(
+        api=fake_api,
+        token="hf_test",
+        repo_id="alecatdad/media-metadata-dataset-test",
+        manifest_path=manifest_path,
+        checkpoint_path="checkpoints/manual",
+        state=RefreshState(),
+        private=True,
+        release_tag="v0.1.0",
+    )
+
+    assert result.release_tag == "v0.1.0"
+    assert fake_api.created_tags == [
+        {
+            "repo_id": "alecatdad/media-metadata-dataset-test",
+            "tag": "v0.1.0",
+            "revision": COMMIT_SHA,
+            "tag_message": "Release snapshot v0.1.0",
+            "token": "hf_test",
+            "repo_type": "dataset",
+        }
+    ]
+
+
+def test_validate_manifest_hf_revision_rejects_missing_commit_sha(tmp_path: Path) -> None:
+    manifest_path = _write_manifest_bundle(tmp_path)
+
+    try:
+        validate_manifest_hf_revision(manifest_path)
+    except ValueError as error:
+        assert "huggingface revision metadata" in str(error)
+    else:
+        raise AssertionError("expected missing HF revision metadata to fail validation")

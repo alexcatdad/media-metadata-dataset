@@ -10,7 +10,11 @@ from media_offline_database.hf_publish import (
     HF_REFRESH_STATE_PATH,
     HfApiLike,
     build_publish_bundle,
+    create_release_tag,
+    extract_hf_commit_sha,
+    validate_manifest_hf_revision,
     write_hf_dataset_card,
+    write_manifest_hf_revision,
 )
 from media_offline_database.refresh_state import RefreshState, record_refresh_finalization
 
@@ -24,7 +28,9 @@ class SnapshotFinalizeResult(BaseModel):
     current_path: str
     current_manifest_path: str
     state_path: str | None = None
+    commit_sha: str | None = None
     commit_url: str | None = None
+    release_tag: str | None = None
 
 
 def _copy_bundle_to_path(*, manifest_path: Path, destination_dir: Path) -> Path:
@@ -80,6 +86,7 @@ def publish_current_snapshot(
     write_dataset_card: bool = True,
     snapshot_prefix: str = "snapshots",
     current_prefix: str = "current",
+    release_tag: str | None = None,
 ) -> SnapshotFinalizeResult:
     api.create_repo(
         repo_id,
@@ -121,6 +128,39 @@ def publish_current_snapshot(
         repo_type="dataset",
         allow_patterns=bundle.allow_patterns,
     )
+    current_commit_sha = extract_hf_commit_sha(current_commit)
+    if current_commit_sha is not None:
+        write_manifest_hf_revision(
+            manifest_path,
+            repo_id=repo_id,
+            commit_sha=current_commit_sha,
+            revision_tag=release_tag,
+        )
+        api.upload_file(
+            path_or_fileobj=manifest_path,
+            path_in_repo=snapshot_manifest_path,
+            repo_id=repo_id,
+            repo_type="dataset",
+            token=token,
+            commit_message=f"Record HF revision for {snapshot_path}",
+        )
+        api.upload_file(
+            path_or_fileobj=manifest_path,
+            path_in_repo=current_manifest_path,
+            repo_id=repo_id,
+            repo_type="dataset",
+            token=token,
+            commit_message=f"Record HF revision for {current_path}",
+        )
+        validate_manifest_hf_revision(manifest_path)
+        if release_tag is not None:
+            create_release_tag(
+                api=api,
+                token=token,
+                repo_id=repo_id,
+                tag=release_tag,
+                commit_sha=current_commit_sha,
+            )
 
     record_refresh_finalization(
         state,
@@ -152,5 +192,7 @@ def publish_current_snapshot(
         current_path=current_path,
         current_manifest_path=current_manifest_path,
         state_path=HF_REFRESH_STATE_PATH,
+        commit_sha=current_commit_sha,
         commit_url=commit_url,
+        release_tag=release_tag,
     )

@@ -30,6 +30,7 @@ def test_record_refresh_progress_round_trips(tmp_path: Path) -> None:
         job_name="anime.manami.default",
         source_name="manami",
         snapshot_id="2026-14",
+        source_snapshot_id="manami:2026-14",
         batch_size=100,
         completed_count=500,
         next_offset=500,
@@ -44,6 +45,8 @@ def test_record_refresh_progress_round_trips(tmp_path: Path) -> None:
 
     assert job.source_name == "manami"
     assert job.snapshot_id == "2026-14"
+    assert job.source_snapshot_id == "manami:2026-14"
+    assert job.offset_basis == "source_order"
     assert job.batch_size == 100
     assert job.completed_count == 500
     assert job.next_offset == 500
@@ -61,6 +64,27 @@ def test_record_refresh_progress_round_trips(tmp_path: Path) -> None:
 
     parsed = json.loads(path.read_text(encoding="utf-8"))
     assert parsed["state_schema"] == REFRESH_STATE_SCHEMA
+
+
+def test_refresh_state_backfills_source_snapshot_id_for_older_state() -> None:
+    state = RefreshState.model_validate(
+        {
+            "state_schema": REFRESH_STATE_SCHEMA,
+            "schema_version": REFRESH_STATE_SCHEMA_VERSION,
+            "jobs": {
+                "anime.manami.default": {
+                    "source_name": "manami",
+                    "snapshot_id": "2026-14",
+                    "status": "in_progress",
+                    "batch_size": 100,
+                    "completed_count": 100,
+                    "next_offset": 100,
+                }
+            },
+        }
+    )
+
+    assert state.jobs["anime.manami.default"].source_snapshot_id == "2026-14"
 
 
 def test_record_refresh_finalization_marks_current_snapshot(tmp_path: Path) -> None:

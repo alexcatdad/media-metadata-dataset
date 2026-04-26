@@ -114,6 +114,7 @@ def run_manami_refresh_checkpoint(
         job_name=job_name,
         source_name="manami",
         snapshot_id=build_result.snapshot_id,
+        source_snapshot_id=snapshot_id,
         batch_size=batch_size,
         completed_count=build_result.end_offset,
         next_offset=build_result.next_offset,
