@@ -10,6 +10,10 @@ consumption layer.
 
 See [`docs/problem-statement.md`](docs/problem-statement.md) for the durable problem statement.
 See [`docs/dataset-surfaces.md`](docs/dataset-surfaces.md) for the intended artifact surfaces.
+See [`docs/schema-documentation.md`](docs/schema-documentation.md) for contributor-facing schema
+guidance, [`docs/hugging-face-dataset-card-plan.md`](docs/hugging-face-dataset-card-plan.md) for
+the dataset card plan, and [`docs/consumer-examples.md`](docs/consumer-examples.md) for file-based
+consumer examples.
 Downstream-consumer personas:
 [`John`](docs/personas/john-downstream-app-developer.md) and
 [`Alex`](docs/personas/alex-anime-discovery.md).
