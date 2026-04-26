@@ -124,6 +124,56 @@ Inferred values must live in a judgment table first. They may later be normalize
 into facets only through explicit materialization rules, confidence thresholds, provenance links,
 and recipe versions. This keeps queryable facets useful without hiding which values were inferred.
 
+## Relationship Taxonomy
+
+Relationships are a core value of the dataset. A small or overly generic taxonomy would collapse the
+signal that downstream consumers need.
+
+The dataset should use rich, precise relationship types where evidence supports them. Relationship
+edges should also expose a broader `relationship_family` so consumers can group precise types
+without losing detail.
+
+Examples of relationship families:
+
+- `identity`: same work/entity resolution.
+- `continuity`: sequel, prequel, continuation, previous installment.
+- `adaptation`: source material, adaptation, alternate adaptation, same source work.
+- `variant`: remake, reboot, retelling, alternate cut, compilation.
+- `franchise`: shared franchise, shared universe, spinoff.
+- `episode_context`: special, OVA/ONA side story, recap, movie tie-in, pilot.
+- `similarity`: soft similarity or discovery adjacency, usually post-v1 or derived.
+- `uncertain`: insufficient evidence or unresolved classification.
+
+Examples of precise relationship types:
+
+- `same_entity`
+- `sequel`
+- `prequel`
+- `continuation`
+- `spinoff`
+- `side_story`
+- `special`
+- `recap`
+- `compilation`
+- `movie_tie_in`
+- `remake`
+- `reboot`
+- `retelling`
+- `alternate_adaptation`
+- `adaptation_of`
+- `adapted_by`
+- `source_material`
+- `same_franchise`
+- `shared_universe`
+- `similar_to`
+- `unrelated`
+- `uncertain`
+
+Directional relationships should preserve direction where it matters, with inverse mappings or
+paired edges where useful. For example, `adaptation_of` and `adapted_by` should not be collapsed
+into one ambiguous label if direction can be known. Generic families are acceptable for grouping and
+fallback, but they should not replace precise types when evidence supports a richer edge.
+
 ## Post-V1 Surface: Similarity Candidates
 
 `similarity_candidates` is a post-v1 progressive enhancement. It should not block the v1 dataset,
