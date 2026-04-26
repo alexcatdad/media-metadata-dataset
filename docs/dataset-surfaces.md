@@ -40,6 +40,24 @@ but those are downstream implementation choices.
 JSONL remains appropriate for append-only project records such as decisions, logs, fixtures, or
 debug traces. It is not the primary dataset consumption format.
 
+## Hugging Face Publication And Versioning
+
+The preferred public host is Hugging Face Dataset Hub. It is the publication and continuity host
+for dataset artifacts, not a query layer owned by this project.
+
+Each publish to the Hugging Face dataset repo should be treated as a physical snapshot commit.
+`main` is the moving latest pointer. Supported releases should be tagged, such as `v0.1.0` or
+`v1.0.0`, so consumers can pin to a stable revision. Consumers that need exact reproducibility
+should pin the full Hugging Face commit SHA rather than relying on `main`.
+
+The manifest should record the Hugging Face repo ID, full commit SHA, branch or tag used for the
+publish, artifact paths, schema versions, source snapshot IDs, recipe versions, row counts,
+published timestamp, and compatibility notes.
+
+Do not duplicate every historical snapshot as dated folders on `main`. The current branch should
+contain the current Parquet tables and current manifest; Hugging Face Git history, tags, and commit
+SHAs provide older snapshot identities.
+
 ## V1 Readiness Gate
 
 V1 is cross-domain. Anime can be the first implementation spine and can remain the richest early
