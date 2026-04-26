@@ -78,8 +78,24 @@ class ParsedSourceRef(BaseModel):
         return f"anime:manami:{self.provider}:{self.external_id}"
 
 
+class NormalizedManamiBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: str
+    total_candidates: int
+    start_offset: int
+    end_offset: int
+    next_offset: int
+    entities: list[BootstrapEntity]
+    last_completed_item_key: str | None = None
+
+
 def load_manami_release(path: Path) -> ManamiRelease:
     return ManamiRelease.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
+def manami_snapshot_id(release: ManamiRelease) -> str:
+    return release.lastUpdate
 
 
 def parse_manami_source_ref(url: str) -> ParsedSourceRef:
@@ -155,20 +171,44 @@ def normalize_manami_release(
     limit: int | None = None,
     title_contains: str | None = None,
 ) -> list[BootstrapEntity]:
+    return normalize_manami_release_batch(
+        release,
+        start_offset=0,
+        batch_size=None,
+        limit=limit,
+        title_contains=title_contains,
+    ).entities
+
+
+def normalize_manami_release_batch(
+    release: ManamiRelease,
+    *,
+    start_offset: int = 0,
+    batch_size: int | None = None,
+    limit: int | None = None,
+    title_contains: str | None = None,
+) -> NormalizedManamiBatch:
     record_source = f"manami-project/anime-offline-database release {release.lastUpdate}"
-    entries = release.data
+    entries = _filtered_entries(
+        release,
+        limit=limit,
+        title_contains=title_contains,
+    )
+    total_candidates = len(entries)
 
-    if title_contains is not None:
-        normalized_query = title_contains.casefold()
-        entries = [
-            entry for entry in entries if normalized_query in entry.title.casefold()
-        ]
+    if start_offset < 0:
+        raise ValueError("start_offset must be non-negative")
+    if start_offset > total_candidates:
+        raise ValueError("start_offset is beyond available candidates")
 
-    if limit is not None:
-        entries = entries[:limit]
+    if batch_size is None:
+        batch_entries = entries[start_offset:]
+    else:
+        batch_entries = entries[start_offset : start_offset + batch_size]
 
+    end_offset = start_offset + len(batch_entries)
     normalized_entities: list[BootstrapEntity] = []
-    for entry in entries:
+    for entry in batch_entries:
         try:
             normalized_entities.append(
                 normalize_manami_entry(entry, record_source=record_source)
@@ -176,7 +216,19 @@ def normalize_manami_release(
         except ValueError:
             continue
 
-    return normalized_entities
+    last_completed_item_key = None
+    if normalized_entities:
+        last_completed_item_key = normalized_entities[-1].entity_id
+
+    return NormalizedManamiBatch(
+        snapshot_id=manami_snapshot_id(release),
+        total_candidates=total_candidates,
+        start_offset=start_offset,
+        end_offset=end_offset,
+        next_offset=end_offset,
+        entities=normalized_entities,
+        last_completed_item_key=last_completed_item_key,
+    )
 
 
 def write_normalized_manami_seed(
@@ -199,6 +251,26 @@ def write_normalized_manami_seed(
         encoding="utf-8",
     )
     return output_path
+
+
+def _filtered_entries(
+    release: ManamiRelease,
+    *,
+    limit: int | None,
+    title_contains: str | None,
+) -> list[ManamiAnimeEntry]:
+    entries = release.data
+
+    if title_contains is not None:
+        normalized_query = title_contains.casefold()
+        entries = [
+            entry for entry in entries if normalized_query in entry.title.casefold()
+        ]
+
+    if limit is not None:
+        entries = entries[:limit]
+
+    return entries
 
 
 def _select_canonical_source(parsed_sources: list[ParsedSourceRef]) -> ParsedSourceRef:

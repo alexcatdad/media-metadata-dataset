@@ -67,6 +67,35 @@ docker compose run --rm app ./scripts/ci/run_dataset_tests.sh
 docker compose run --rm app ./scripts/ci/run_artifact_smokes.sh
 ```
 
+A separate GitHub Actions workflow at [`.github/workflows/dataset-refresh.yml`](.github/workflows/dataset-refresh.yml)
+owns checkpointed refresh/publish runs. It is intentionally split from deterministic CI:
+
+- manual trigger first via `workflow_dispatch`;
+- conservative weekly `schedule` second;
+- schedule runs only when repository variable `DATASET_REFRESH_SCHEDULE_ENABLED` is set to `true`;
+- refresh state continuity comes from the Hugging Face dataset repo, not from runner cache.
+
+The workflow uses the existing CLI surface:
+
+- `mod manami-refresh` to build one checkpointed batch and publish it;
+- `mod hf-state` before and after the run to show persisted checkpoint progress.
+
+Recommended GitHub configuration:
+
+- secret: `HF_TOKEN`
+- optional variables:
+  - `HF_NAMESPACE`
+  - `HF_DATASET_REPO`
+  - `DATASET_REFRESH_RELEASE_URL` if the scheduled run should fetch a real release JSON instead of using the tiny built-in fixture
+  - `DATASET_REFRESH_REPO_ID`
+  - `DATASET_REFRESH_JOB_NAME`
+  - `DATASET_REFRESH_BATCH_SIZE`
+  - `DATASET_REFRESH_TITLE_CONTAINS`
+  - `DATASET_REFRESH_LIMIT`
+  - `DATASET_REFRESH_PRIVATE_REPO`
+
+The manual workflow inputs are the preferred first operator surface. The scheduled lane is kept deliberately conservative and falls back to a tiny built-in fixture when no release URL variable is configured, so we can exercise checkpoint/publish continuity without depending on a separate source-download implementation.
+
 ## Source Policy
 
 Provider credentials grant access, not redistribution rights. Each source must be classified as one
@@ -124,4 +153,24 @@ The composed entrypoint is:
 docker compose run --rm app mod anime-build \
   --input-path /path/to/anime-offline-database.json \
   --title-contains 'Made in Abyss'
+```
+
+## Checkpointed Refresh State
+
+The dataset continuity layer should live with the published dataset, not inside a CI runner.
+
+- Hugging Face dataset repos hold checkpoint artifacts and `state/refresh-state.json`.
+- Each refresh job records progress by source snapshot plus stable batch offsets.
+- Partial checkpoint uploads are allowed; the next run resumes from the last persisted offset for
+  that snapshot.
+
+Current commands:
+
+```sh
+docker compose run --rm app mod hf-state --repo-id namespace/media-metadata-dataset-test
+docker compose run --rm app mod hf-publish /path/to/manifest.json --repo-id namespace/media-metadata-dataset-test
+docker compose run --rm app mod manami-refresh \
+  --input-path /path/to/anime-offline-database.json \
+  --repo-id namespace/media-metadata-dataset-test \
+  --batch-size 100
 ```

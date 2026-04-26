@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     mod_data_dir: Path = Field(default=Path(".mod/data"), validation_alias="MOD_DATA_DIR")
     mod_cache_dir: Path = Field(default=Path(".mod/cache"), validation_alias="MOD_CACHE_DIR")
     mod_output_dir: Path = Field(default=Path(".mod/out"), validation_alias="MOD_OUTPUT_DIR")
+    hf_token: str | None = Field(default=None, validation_alias="HF_TOKEN")
+    hf_namespace: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("HF_NAMESPACE", "HF_ORG"),
+    )
+    hf_dataset_repo: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("HF_DATASET_REPO", "HF_DATASET_PREFIX"),
+    )
     cloudflare_account_id: str | None = Field(
         default=None,
         validation_alias="CLOUDFLARE_ACCOUNT_ID",

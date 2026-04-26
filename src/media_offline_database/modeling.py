@@ -25,12 +25,36 @@ class JudgmentDecision(StrEnum):
     UNCERTAIN = "uncertain"
 
 
+class RelationshipLabel(StrEnum):
+    """Allowed cross-domain relationship labels for entity-pair judgments."""
+
+    SAME_ENTITY = "same_entity"
+    MOVIE_RELATED = "movie_related"
+    SPECIAL_RELATED = "special_related"
+    SEQUEL_PREQUEL = "sequel_prequel"
+    REMAKE_REBOOT = "remake_reboot"
+    FRANCHISE_RELATED = "franchise_related"
+    ADAPTATION_RELATED = "adaptation_related"
+    UNRELATED = "unrelated"
+    UNCERTAIN = "uncertain"
+
+
 class LlmJudgment(BaseModel):
     """Strict structured output shape for model-assisted judgments."""
 
     model_config = ConfigDict(extra="forbid")
 
     decision: JudgmentDecision
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: str = Field(min_length=1)
+
+
+class LlmRelationshipJudgment(BaseModel):
+    """Strict structured output for relationship classification judgments."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    relationship: RelationshipLabel
     confidence: float = Field(ge=0.0, le=1.0)
     reasoning: str = Field(min_length=1)
 

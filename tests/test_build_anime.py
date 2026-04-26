@@ -105,6 +105,12 @@ def test_build_manami_anime_artifact_runs_full_pipeline(tmp_path: Path) -> None:
 
     assert relation_fetch_calls == [97986, 109911]
     assert metadata_fetch_calls == [97986, 109911]
+    assert result.snapshot_id == "2026-04-25"
+    assert result.start_offset == 0
+    assert result.end_offset == 2
+    assert result.next_offset == 2
+    assert result.total_candidates == 2
+    assert result.last_completed_item_key == "anime:manami:anidb:14177"
 
     assert normalized_entities[0].related[0].relationship == "related_anime"
     assert len(relation_entities[0].related) == 1
@@ -196,8 +202,87 @@ def test_build_manami_anime_artifact_passes_title_filter_to_pipeline(tmp_path: P
     assert [entity.title for entity in metadata_entities] == ["Made in Abyss"]
     assert relation_fetch_calls == [97986]
     assert metadata_fetch_calls == [97986]
+    assert result.total_candidates == 1
     assert manifest["row_count"] == 1
     assert manifest["relationship_row_count"] == 0
+
+
+def test_build_manami_anime_artifact_supports_batch_offsets(tmp_path: Path) -> None:
+    release_path = tmp_path / "manami-release.json"
+    release_path.write_text(
+        json.dumps(
+            {
+                "repository": "https://github.com/manami-project/anime-offline-database",
+                "lastUpdate": "2026-04-25",
+                "data": [
+                    {
+                        "sources": [
+                            "https://anidb.net/anime/12681",
+                            "https://anilist.co/anime/97986",
+                        ],
+                        "title": "Made in Abyss",
+                        "type": "TV",
+                        "episodes": 13,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SUMMER", "year": 2017},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                    {
+                        "sources": [
+                            "https://anidb.net/anime/23",
+                            "https://anilist.co/anime/1",
+                        ],
+                        "title": "Cowboy Bebop",
+                        "type": "TV",
+                        "episodes": 26,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SPRING", "year": 1998},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                    {
+                        "sources": [
+                            "https://anidb.net/anime/14177",
+                            "https://anilist.co/anime/109911",
+                        ],
+                        "title": "Made in Abyss Movie 3: Fukaki Tamashii no Reimei",
+                        "type": "MOVIE",
+                        "episodes": 1,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "WINTER", "year": 2020},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = build_manami_anime_artifact(
+        release_path=release_path,
+        output_dir=tmp_path / "out",
+        start_offset=1,
+        batch_size=1,
+        fetch_relations=lambda _anilist_id: [],
+        fetch_metadata=lambda _anilist_id: AniListResolvedMetadata(
+            genres=["Adventure"],
+            studios=["Bones"],
+            creators=["Someone"],
+        ),
+    )
+
+    metadata_entities = load_bootstrap_entities(result.metadata_enriched_seed_path)
+
+    assert [entity.title for entity in metadata_entities] == ["Cowboy Bebop"]
+    assert result.start_offset == 1
+    assert result.end_offset == 2
+    assert result.next_offset == 2
+    assert result.total_candidates == 3
 
 
 def test_anime_build_cli_rejects_missing_release_path() -> None:

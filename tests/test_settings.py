@@ -48,7 +48,9 @@ def test_z_ai_defaults_live_in_settings() -> None:
 
 
 def test_z_ai_credentials_are_optional_but_detectable() -> None:
-    assert not Settings().has_z_ai_credentials
+    blank_settings = Settings(z_ai_api_key_id=None, z_ai_api_key_secret=None)
+
+    assert not blank_settings.has_z_ai_credentials
 
     settings = Settings(
         z_ai_api_key_id="id",

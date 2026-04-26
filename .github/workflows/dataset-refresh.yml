@@ -1,0 +1,431 @@
+name: Dataset Refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_mode:
+        description: "fixture creates a tiny local manami-like snapshot; url downloads a release JSON first"
+        required: true
+        type: choice
+        options:
+          - fixture
+          - url
+        default: fixture
+      release_url:
+        description: "Required when source_mode=url"
+        required: false
+        type: string
+      repo_id:
+        description: "Optional explicit Hugging Face dataset repo id (namespace/name)"
+        required: false
+        type: string
+      job_name:
+        description: "Stable checkpoint job key. Keep it stable to resume from prior progress."
+        required: false
+        type: string
+        default: workflow.manami.manual
+      batch_size:
+        description: "How many candidates to process before checkpointing"
+        required: false
+        type: number
+        default: 100
+      title_contains:
+        description: "Optional case-insensitive title filter for a focused refresh slice"
+        required: false
+        type: string
+      limit:
+        description: "Optional max candidates after filtering; leave 0 for no limit"
+        required: false
+        type: number
+        default: 0
+      private_repo:
+        description: "Publish to a private Hugging Face dataset repo"
+        required: false
+        type: boolean
+        default: true
+      upload_artifacts:
+        description: "Upload local refresh outputs as a GitHub Actions artifact"
+        required: false
+        type: boolean
+        default: true
+      run_llm_enhancement:
+        description: "Prepare and execute LLM relationship judgments before finalization"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 3 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dataset-refresh-${{ github.event_name == 'workflow_dispatch' && (inputs.repo_id != '' && inputs.repo_id || inputs.job_name) || 'scheduled' }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.DATASET_REFRESH_SCHEDULE_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_NAMESPACE: ${{ vars.HF_NAMESPACE }}
+      HF_DATASET_REPO: ${{ vars.HF_DATASET_REPO }}
+      SCHEDULE_RELEASE_URL: ${{ vars.DATASET_REFRESH_RELEASE_URL }}
+      SCHEDULE_REPO_ID: ${{ vars.DATASET_REFRESH_REPO_ID }}
+      SCHEDULE_JOB_NAME: ${{ vars.DATASET_REFRESH_JOB_NAME }}
+      SCHEDULE_BATCH_SIZE: ${{ vars.DATASET_REFRESH_BATCH_SIZE }}
+      SCHEDULE_TITLE_CONTAINS: ${{ vars.DATASET_REFRESH_TITLE_CONTAINS }}
+      SCHEDULE_LIMIT: ${{ vars.DATASET_REFRESH_LIMIT }}
+      SCHEDULE_PRIVATE_REPO: ${{ vars.DATASET_REFRESH_PRIVATE_REPO }}
+      SCHEDULE_RUN_LLM_ENHANCEMENT: ${{ vars.DATASET_REFRESH_RUN_LLM_ENHANCEMENT }}
+      OPENAI_COMPAT_API_KEY: ${{ secrets.OPENAI_COMPAT_API_KEY }}
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v6.0.2
+
+      - name: Resolve refresh parameters
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${HF_TOKEN:-}" ]]; then
+            echo "HF_TOKEN secret is required for dataset refresh runs." >&2
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            source_mode='${{ inputs.source_mode }}'
+            release_url='${{ inputs.release_url }}'
+            repo_id='${{ inputs.repo_id }}'
+            job_name='${{ inputs.job_name }}'
+            batch_size='${{ inputs.batch_size }}'
+            title_contains='${{ inputs.title_contains }}'
+            limit='${{ inputs.limit }}'
+            private_repo='${{ inputs.private_repo }}'
+            upload_artifacts='${{ inputs.upload_artifacts }}'
+            run_llm_enhancement='${{ inputs.run_llm_enhancement }}'
+          else
+            source_mode='fixture'
+            release_url="${SCHEDULE_RELEASE_URL:-}"
+            if [[ -n "${release_url}" ]]; then
+              source_mode='url'
+            fi
+            repo_id="${SCHEDULE_REPO_ID:-}"
+            job_name="${SCHEDULE_JOB_NAME:-workflow.manami.scheduled}"
+            batch_size="${SCHEDULE_BATCH_SIZE:-100}"
+            title_contains="${SCHEDULE_TITLE_CONTAINS:-}"
+            limit="${SCHEDULE_LIMIT:-0}"
+            private_repo="${SCHEDULE_PRIVATE_REPO:-true}"
+            upload_artifacts='true'
+            run_llm_enhancement="${SCHEDULE_RUN_LLM_ENHANCEMENT:-false}"
+          fi
+
+          if [[ "${source_mode}" == "url" && -z "${release_url}" ]]; then
+            echo "release_url is required when source_mode=url." >&2
+            exit 1
+          fi
+
+          case "${private_repo}" in
+            true|false) ;;
+            *) echo "private_repo must resolve to true or false, got: ${private_repo}" >&2; exit 1 ;;
+          esac
+
+          case "${upload_artifacts}" in
+            true|false) ;;
+            *) echo "upload_artifacts must resolve to true or false, got: ${upload_artifacts}" >&2; exit 1 ;;
+          esac
+
+          case "${run_llm_enhancement}" in
+            true|false) ;;
+            *) echo "run_llm_enhancement must resolve to true or false, got: ${run_llm_enhancement}" >&2; exit 1 ;;
+          esac
+
+          if ! [[ "${batch_size}" =~ ^[0-9]+$ ]] || [[ "${batch_size}" -lt 1 ]]; then
+            echo "batch_size must be a positive integer, got: ${batch_size}" >&2
+            exit 1
+          fi
+
+          if ! [[ "${limit}" =~ ^[0-9]+$ ]]; then
+            echo "limit must be a non-negative integer, got: ${limit}" >&2
+            exit 1
+          fi
+
+          mkdir -p .mod/input .mod/out
+
+          {
+            echo "SOURCE_MODE=${source_mode}"
+            echo "RELEASE_URL=${release_url}"
+            echo "REFRESH_REPO_ID=${repo_id}"
+            echo "REFRESH_JOB_NAME=${job_name}"
+            echo "REFRESH_BATCH_SIZE=${batch_size}"
+            echo "REFRESH_TITLE_CONTAINS=${title_contains}"
+            echo "REFRESH_LIMIT=${limit}"
+            echo "REFRESH_PRIVATE_REPO=${private_repo}"
+            echo "UPLOAD_REFRESH_ARTIFACTS=${upload_artifacts}"
+            echo "RUN_LLM_ENHANCEMENT=${run_llm_enhancement}"
+            echo "REFRESH_SOURCE_PATH=${GITHUB_WORKSPACE}/.mod/input/refresh-source.json"
+          } >> "${GITHUB_ENV}"
+
+      - name: Prepare refresh source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${SOURCE_MODE}" == "url" ]]; then
+            curl --fail --silent --show-error --location "${RELEASE_URL}" --output "${REFRESH_SOURCE_PATH}"
+          else
+            cat <<'JSON' > "${REFRESH_SOURCE_PATH}"
+          {
+            "repository": "https://github.com/manami-project/anime-offline-database",
+            "lastUpdate": "2026-04-25",
+            "data": [
+              {
+                "sources": [
+                  "https://anidb.net/anime/12681",
+                  "https://anilist.co/anime/97986"
+                ],
+                "title": "Made in Abyss",
+                "type": "TV",
+                "episodes": 13,
+                "status": "FINISHED",
+                "animeSeason": { "season": "SUMMER", "year": 2017 },
+                "synonyms": [],
+                "relatedAnime": [],
+                "tags": ["Adventure", "Fantasy"]
+              },
+              {
+                "sources": [
+                  "https://anidb.net/anime/23",
+                  "https://anilist.co/anime/1"
+                ],
+                "title": "Cowboy Bebop",
+                "type": "TV",
+                "episodes": 26,
+                "status": "FINISHED",
+                "animeSeason": { "season": "SPRING", "year": 1998 },
+                "synonyms": [],
+                "relatedAnime": [],
+                "tags": ["Action", "Space"]
+              }
+            ]
+          }
+          JSON
+          fi
+
+          ls -lh "${REFRESH_SOURCE_PATH}"
+
+      - name: Build image
+        run: docker build -t media-metadata-dataset:refresh .
+
+      - name: Show current HF refresh state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            docker run --rm
+            -e HF_TOKEN
+            -e HF_NAMESPACE
+            -e HF_DATASET_REPO
+            media-metadata-dataset:refresh
+            mod hf-state
+          )
+          if [[ -n "${REFRESH_REPO_ID}" ]]; then
+            cmd+=(--repo-id "${REFRESH_REPO_ID}")
+          fi
+          "${cmd[@]}" | tee .mod/out/pre-refresh-state.json
+
+      - name: Run checkpointed dataset refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            docker run --rm
+            -v "${GITHUB_WORKSPACE}/.mod/input:/app/.mod/input"
+            -v "${GITHUB_WORKSPACE}/.mod/out:/app/.mod/out"
+            -e HF_TOKEN
+            -e HF_NAMESPACE
+            -e HF_DATASET_REPO
+            media-metadata-dataset:refresh
+            mod manami-refresh
+            --input-path /app/.mod/input/refresh-source.json
+            --output-dir /app/.mod/out/dataset-refresh
+            --job-name "${REFRESH_JOB_NAME}"
+            --batch-size "${REFRESH_BATCH_SIZE}"
+          )
+          if [[ -n "${REFRESH_REPO_ID}" ]]; then
+            cmd+=(--repo-id "${REFRESH_REPO_ID}")
+          fi
+          if [[ -n "${REFRESH_TITLE_CONTAINS}" ]]; then
+            cmd+=(--title-contains "${REFRESH_TITLE_CONTAINS}")
+          fi
+          if [[ "${REFRESH_LIMIT}" != "0" ]]; then
+            cmd+=(--limit "${REFRESH_LIMIT}")
+          fi
+          if [[ "${REFRESH_PRIVATE_REPO}" == "true" ]]; then
+            cmd+=(--private)
+          else
+            cmd+=(--public)
+          fi
+          "${cmd[@]}" | tee .mod/out/dataset-refresh/result.json
+
+      - name: Prepare LLM judgment candidates
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_llm_enhancement }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${RUN_LLM_ENHANCEMENT}" != "true" ]]; then
+            echo "LLM enhancement disabled; skipping candidate preparation."
+            exit 0
+          fi
+
+          manifest_path="$(jq -r '.manifest_path' .mod/out/dataset-refresh/result.json)"
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/.mod/out:/app/.mod/out" \
+            media-metadata-dataset:refresh \
+            mod llm-prepare-candidates \
+            "${manifest_path}" \
+            --confidence-threshold 0.85 \
+            | tee .mod/out/llm-candidate-plan.json
+
+      - name: Execute LLM judgments
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_llm_enhancement }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${RUN_LLM_ENHANCEMENT}" != "true" ]]; then
+            echo "LLM enhancement disabled; skipping judgment execution."
+            exit 0
+          fi
+
+          if [[ -z "${OPENAI_COMPAT_API_KEY:-}" ]]; then
+            echo "OPENAI_COMPAT_API_KEY is required when run_llm_enhancement=true." >&2
+            exit 1
+          fi
+
+          manifest_path="$(jq -r '.manifest_path' .mod/out/dataset-refresh/result.json)"
+          candidates_path="$(jq -r '.candidates_path' .mod/out/llm-candidate-plan.json)"
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/.mod/out:/app/.mod/out" \
+            -e OPENAI_COMPAT_API_KEY \
+            media-metadata-dataset:refresh \
+            mod llm-execute-candidates \
+            "${candidates_path}" \
+            "${manifest_path}" \
+            | tee .mod/out/llm-execution-result.json
+
+      - name: Apply LLM judgments to relationship artifact
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_llm_enhancement }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${RUN_LLM_ENHANCEMENT}" != "true" ]]; then
+            echo "LLM enhancement disabled; skipping judgment application."
+            exit 0
+          fi
+
+          manifest_path="$(jq -r '.manifest_path' .mod/out/dataset-refresh/result.json)"
+          decisions_path="$(jq -r '.decisions_path' .mod/out/llm-execution-result.json)"
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/.mod/out:/app/.mod/out" \
+            media-metadata-dataset:refresh \
+            mod llm-apply-judgments \
+            "${decisions_path}" \
+            "${manifest_path}" \
+            --min-confidence 0.8 \
+            | tee .mod/out/llm-apply-result.json
+
+      - name: Materialize local current snapshot surface
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          refresh_status="$(jq -r '.status' .mod/out/dataset-refresh/result.json)"
+          if [[ "${refresh_status}" != "completed" ]]; then
+            echo "Refresh status is ${refresh_status}; skipping local current snapshot materialization."
+            exit 0
+          fi
+
+          manifest_path="$(jq -r '.manifest_path' .mod/out/dataset-refresh/result.json)"
+          snapshot_id="$(jq -r '.snapshot_id' .mod/out/dataset-refresh/result.json)"
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/.mod/out:/app/.mod/out" \
+            media-metadata-dataset:refresh \
+            mod materialize-current-snapshot-surface \
+            "${manifest_path}" \
+            --snapshot-id "${snapshot_id}" \
+            --job-name "${REFRESH_JOB_NAME}" \
+            --output-dir /app/.mod/out/finalized-current \
+            | tee .mod/out/finalize-local-result.json
+
+      - name: Promote current snapshot on Hugging Face
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          refresh_status="$(jq -r '.status' .mod/out/dataset-refresh/result.json)"
+          if [[ "${refresh_status}" != "completed" ]]; then
+            echo "Refresh status is ${refresh_status}; skipping HF current-snapshot promotion."
+            exit 0
+          fi
+
+          manifest_path="$(jq -r '.manifest_path' .mod/out/dataset-refresh/result.json)"
+          snapshot_id="$(jq -r '.snapshot_id' .mod/out/dataset-refresh/result.json)"
+
+          cmd=(
+            docker run --rm
+            -v "${GITHUB_WORKSPACE}/.mod/out:/app/.mod/out"
+            -e HF_TOKEN
+            -e HF_NAMESPACE
+            -e HF_DATASET_REPO
+            media-metadata-dataset:refresh
+            mod hf-finalize-current
+            "${manifest_path}"
+            --snapshot-id "${snapshot_id}"
+            --job-name "${REFRESH_JOB_NAME}"
+          )
+          if [[ -n "${REFRESH_REPO_ID}" ]]; then
+            cmd+=(--repo-id "${REFRESH_REPO_ID}")
+          fi
+          if [[ "${REFRESH_PRIVATE_REPO}" == "true" ]]; then
+            cmd+=(--private)
+          else
+            cmd+=(--public)
+          fi
+          "${cmd[@]}" | tee .mod/out/finalize-hf-result.json
+
+      - name: Show updated HF refresh state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cmd=(
+            docker run --rm
+            -e HF_TOKEN
+            -e HF_NAMESPACE
+            -e HF_DATASET_REPO
+            media-metadata-dataset:refresh
+            mod hf-state
+          )
+          if [[ -n "${REFRESH_REPO_ID}" ]]; then
+            cmd+=(--repo-id "${REFRESH_REPO_ID}")
+          fi
+          "${cmd[@]}" | tee .mod/out/post-refresh-state.json
+
+      - name: Upload refresh artifacts
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload_artifacts }}
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dataset-refresh-artifacts
+          path: .mod/out
+          retention-days: 7

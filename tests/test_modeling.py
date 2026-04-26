@@ -8,7 +8,9 @@ from media_offline_database.modeling import (
     DeterministicEmbeddingClient,
     JudgmentDecision,
     LlmJudgment,
+    LlmRelationshipJudgment,
     ModelTask,
+    RelationshipLabel,
     UsageBudget,
     model_cache_key,
 )
@@ -76,5 +78,23 @@ def test_llm_judgment_schema_is_strict() -> None:
                 "confidence": 1.2,
                 "reasoning": "Too confident.",
                 "extra_field": "not allowed",
+            }
+        )
+
+
+def test_llm_relationship_judgment_schema_is_strict() -> None:
+    judgment = LlmRelationshipJudgment(
+        relationship=RelationshipLabel.SEQUEL_PREQUEL,
+        confidence=0.73,
+        reasoning="The movie is a direct continuation of the same adaptation line.",
+    )
+
+    assert judgment.relationship == RelationshipLabel.SEQUEL_PREQUEL
+    with pytest.raises(ValidationError):
+        LlmRelationshipJudgment.model_validate(
+            {
+                "relationship": "not_a_real_label",
+                "confidence": 0.5,
+                "reasoning": "Nope",
             }
         )

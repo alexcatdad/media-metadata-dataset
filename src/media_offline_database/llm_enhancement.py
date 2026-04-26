@@ -1,0 +1,657 @@
+from __future__ import annotations
+
+import json
+from hashlib import sha256
+from pathlib import Path
+from typing import Any, Literal, Protocol, cast
+
+import polars as pl
+from openai import OpenAI
+from pydantic import BaseModel, ConfigDict, Field
+
+from media_offline_database.modeling import (
+    LlmRelationshipJudgment,
+    ModelTask,
+    model_cache_key,
+    stable_json,
+)
+
+DEFAULT_LLM_PROVIDER = "openrouter"
+DEFAULT_LLM_MODEL = "inclusionai/ling-2.6-flash:free"
+DEFAULT_LLM_RECIPE_VERSION = "relationship-classification-v1"
+
+
+class LlmRelationshipCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_entity_id: str
+    target_entity_id: str
+    relationship: str
+    source_domain: str
+    target_domain: str
+    source_title: str
+    target_title: str
+    source_original_title: str | None = None
+    target_original_title: str | None = None
+    source_media_type: str
+    target_media_type: str
+    source_release_year: int
+    target_release_year: int
+    source_genres: list[str] = Field(default_factory=list)
+    target_genres: list[str] = Field(default_factory=list)
+    source_studios: list[str] = Field(default_factory=list)
+    target_studios: list[str] = Field(default_factory=list)
+    source_creators: list[str] = Field(default_factory=list)
+    target_creators: list[str] = Field(default_factory=list)
+    relationship_confidence: float
+    supporting_source_count: int
+    supporting_provider_count: int
+    supporting_urls: list[str] = Field(default_factory=list)
+    previous_relationship: str | None = None
+    previous_relationship_confidence: float | None = None
+    changed_since_previous: bool = False
+    input_fingerprint: str
+    cache_key: str
+
+
+class LlmCandidatePlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manifest_path: Path
+    candidate_count: int
+    candidates_path: Path
+    summary_path: Path
+
+
+class LlmDecisionRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_entity_id: str
+    target_entity_id: str
+    provider: str
+    model: str
+    recipe_version: str
+    input_fingerprint: str
+    cache_key: str
+    raw_response: str | None = None
+    judgment: LlmRelationshipJudgment | None = None
+    status: Literal["ok", "parse_error", "api_error"]
+    error_type: str | None = None
+    error_message: str | None = None
+
+
+class LlmExecutionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manifest_path: Path
+    candidate_count: int
+    executed_count: int
+    decisions_path: Path
+    summary_path: Path
+
+
+class LlmApplyResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manifest_path: Path
+    decisions_path: Path
+    relationship_count: int
+    eligible_decision_count: int
+    applied_count: int
+    unchanged_count: int
+    summary_path: Path
+
+
+class OpenAiClientLike(Protocol):
+    chat: Any
+
+
+def _manifest_files(manifest_path: Path) -> dict[str, Path]:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    return {file["kind"]: manifest_path.parent / file["path"] for file in manifest["files"]}
+
+
+def _load_entity_rows(manifest_path: Path) -> dict[str, dict[str, Any]]:
+    files = _manifest_files(manifest_path)
+    frame = pl.read_parquet(files["entities"])
+    rows: dict[str, dict[str, Any]] = {}
+    for row in frame.iter_rows(named=True):
+        rows[str(row["entity_id"])] = row
+    return rows
+
+
+def _load_relationship_rows(manifest_path: Path) -> list[dict[str, Any]]:
+    files = _manifest_files(manifest_path)
+    frame = pl.read_parquet(files["relationships"])
+    return list(frame.iter_rows(named=True))
+
+
+def _previous_index(manifest_path: Path | None) -> dict[tuple[str, str], dict[str, Any]]:
+    if manifest_path is None:
+        return {}
+    return {
+        (str(row["source_entity_id"]), str(row["target_entity_id"])): row
+        for row in _load_relationship_rows(manifest_path)
+    }
+
+
+def _normalized_candidate_input(
+    *,
+    source_row: dict[str, Any],
+    target_row: dict[str, Any],
+    relationship_row: dict[str, Any],
+    previous_row: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "source_entity_id": source_row["entity_id"],
+        "target_entity_id": target_row["entity_id"],
+        "source": {
+            "domain": source_row["domain"],
+            "title": source_row["title"],
+            "original_title": source_row["original_title"],
+            "media_type": source_row["media_type"],
+            "release_year": source_row["release_year"],
+            "genres": list(source_row.get("genres") or []),
+            "studios": list(source_row.get("studios") or []),
+            "creators": list(source_row.get("creators") or []),
+        },
+        "target": {
+            "domain": target_row["domain"],
+            "title": target_row["title"],
+            "original_title": target_row["original_title"],
+            "media_type": target_row["media_type"],
+            "release_year": target_row["release_year"],
+            "genres": list(target_row.get("genres") or []),
+            "studios": list(target_row.get("studios") or []),
+            "creators": list(target_row.get("creators") or []),
+        },
+        "relationship": {
+            "current": relationship_row["relationship"],
+            "confidence": relationship_row["relationship_confidence"],
+            "supporting_source_count": relationship_row["supporting_source_count"],
+            "supporting_provider_count": relationship_row["supporting_provider_count"],
+            "supporting_urls": list(relationship_row.get("supporting_urls") or []),
+            "previous": {
+                "relationship": None if previous_row is None else previous_row["relationship"],
+                "confidence": (
+                    None
+                    if previous_row is None
+                    else previous_row["relationship_confidence"]
+                ),
+            },
+        },
+    }
+
+
+def select_llm_relationship_candidates(
+    *,
+    manifest_path: Path,
+    previous_manifest_path: Path | None = None,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    model: str = DEFAULT_LLM_MODEL,
+    recipe_version: str = DEFAULT_LLM_RECIPE_VERSION,
+    confidence_threshold: float = 0.85,
+) -> list[LlmRelationshipCandidate]:
+    entity_rows = _load_entity_rows(manifest_path)
+    previous_rows = _previous_index(previous_manifest_path)
+    candidates: list[LlmRelationshipCandidate] = []
+
+    for relationship_row in _load_relationship_rows(manifest_path):
+        if float(relationship_row["relationship_confidence"]) >= confidence_threshold and str(
+            relationship_row["relationship"]
+        ) != "related_anime":
+            continue
+
+        source_entity_id = str(relationship_row["source_entity_id"])
+        target_entity_id = str(relationship_row["target_entity_id"])
+        source_row = entity_rows[source_entity_id]
+        target_row = entity_rows[target_entity_id]
+        previous_row = previous_rows.get((source_entity_id, target_entity_id))
+        normalized_input = _normalized_candidate_input(
+            source_row=source_row,
+            target_row=target_row,
+            relationship_row=relationship_row,
+            previous_row=previous_row,
+        )
+        input_fingerprint = sha256(stable_json(normalized_input).encode("utf-8")).hexdigest()
+        cache_key = model_cache_key(
+            task=ModelTask.LLM_JUDGMENT,
+            provider=provider,
+            model=model,
+            recipe_version=recipe_version,
+            normalized_input=normalized_input,
+        )
+
+        changed_since_previous = previous_row is None or (
+            previous_row["relationship"] != relationship_row["relationship"]
+            or float(previous_row["relationship_confidence"])
+            != float(relationship_row["relationship_confidence"])
+        )
+
+        candidates.append(
+            LlmRelationshipCandidate(
+                source_entity_id=source_entity_id,
+                target_entity_id=target_entity_id,
+                relationship=str(relationship_row["relationship"]),
+                source_domain=str(source_row["domain"]),
+                target_domain=str(target_row["domain"]),
+                source_title=str(source_row["title"]),
+                target_title=str(target_row["title"]),
+                source_original_title=(
+                    None if source_row["original_title"] is None else str(source_row["original_title"])
+                ),
+                target_original_title=(
+                    None if target_row["original_title"] is None else str(target_row["original_title"])
+                ),
+                source_media_type=str(source_row["media_type"]),
+                target_media_type=str(target_row["media_type"]),
+                source_release_year=int(source_row["release_year"]),
+                target_release_year=int(target_row["release_year"]),
+                source_genres=list(source_row.get("genres") or []),
+                target_genres=list(target_row.get("genres") or []),
+                source_studios=list(source_row.get("studios") or []),
+                target_studios=list(target_row.get("studios") or []),
+                source_creators=list(source_row.get("creators") or []),
+                target_creators=list(target_row.get("creators") or []),
+                relationship_confidence=float(relationship_row["relationship_confidence"]),
+                supporting_source_count=int(relationship_row["supporting_source_count"]),
+                supporting_provider_count=int(relationship_row["supporting_provider_count"]),
+                supporting_urls=list(relationship_row.get("supporting_urls") or []),
+                previous_relationship=(
+                    None if previous_row is None else str(previous_row["relationship"])
+                ),
+                previous_relationship_confidence=(
+                    None
+                    if previous_row is None
+                    else float(previous_row["relationship_confidence"])
+                ),
+                changed_since_previous=changed_since_previous,
+                input_fingerprint=input_fingerprint,
+                cache_key=cache_key,
+            )
+        )
+
+    candidates.sort(
+        key=lambda item: (
+            item.relationship_confidence,
+            -item.supporting_provider_count,
+            item.source_entity_id,
+            item.target_entity_id,
+        )
+    )
+    return candidates
+
+
+def write_llm_candidate_plan(
+    *,
+    manifest_path: Path,
+    candidates: list[LlmRelationshipCandidate],
+) -> LlmCandidatePlan:
+    output_dir = manifest_path.parent
+    candidates_path = output_dir / "llm-judgment-candidates.jsonl"
+    summary_path = output_dir / "llm-judgment-summary.json"
+
+    candidates_path.write_text(
+        "\n".join(candidate.model_dump_json() for candidate in candidates)
+        + ("\n" if candidates else ""),
+        encoding="utf-8",
+    )
+    summary_path.write_text(
+        json.dumps(
+            {
+                "candidate_count": len(candidates),
+                "manifest_path": str(manifest_path),
+                "provider": DEFAULT_LLM_PROVIDER,
+                "model": DEFAULT_LLM_MODEL,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _ensure_manifest_sidecars(
+        manifest_path,
+        entries=[
+            {"path": candidates_path.name, "format": "jsonl", "kind": "llm_judgment_candidates"},
+            {"path": summary_path.name, "format": "json", "kind": "llm_judgment_summary"},
+        ],
+    )
+
+    return LlmCandidatePlan(
+        manifest_path=manifest_path,
+        candidate_count=len(candidates),
+        candidates_path=candidates_path,
+        summary_path=summary_path,
+    )
+
+
+def build_relationship_judgment_prompt(candidate: LlmRelationshipCandidate) -> str:
+    payload = {
+        "source": {
+            "entity_id": candidate.source_entity_id,
+            "domain": candidate.source_domain,
+            "title": candidate.source_title,
+            "original_title": candidate.source_original_title,
+            "media_type": candidate.source_media_type,
+            "release_year": candidate.source_release_year,
+            "genres": candidate.source_genres,
+            "studios": candidate.source_studios,
+            "creators": candidate.source_creators,
+        },
+        "target": {
+            "entity_id": candidate.target_entity_id,
+            "domain": candidate.target_domain,
+            "title": candidate.target_title,
+            "original_title": candidate.target_original_title,
+            "media_type": candidate.target_media_type,
+            "release_year": candidate.target_release_year,
+            "genres": candidate.target_genres,
+            "studios": candidate.target_studios,
+            "creators": candidate.target_creators,
+        },
+        "current_relationship": candidate.relationship,
+        "current_confidence": candidate.relationship_confidence,
+        "previous_relationship": candidate.previous_relationship,
+        "previous_confidence": candidate.previous_relationship_confidence,
+        "supporting_source_count": candidate.supporting_source_count,
+        "supporting_provider_count": candidate.supporting_provider_count,
+        "supporting_urls": candidate.supporting_urls,
+    }
+    return f"""
+You judge whether two media entities have the correct relationship label.
+
+Return only a JSON object with this exact shape:
+{{
+  "relationship": "same_entity" | "movie_related" | "special_related" | "sequel_prequel" | "remake_reboot" | "franchise_related" | "adaptation_related" | "unrelated" | "uncertain",
+  "confidence": number,
+  "reasoning": string
+}}
+
+Rules:
+- same_entity is strict: same work, same release, same core record.
+- movie_related needs an actual MOVIE/non-MOVIE pairing in the same franchise.
+- special_related needs an actual SPECIAL/main-entry pairing.
+- sequel_prequel is for direct continuation or earlier/later installment in the same adaptation line.
+- remake_reboot is for alternate adaptation lines, reboots, or retellings of the same core work.
+- franchise_related is broader same-franchise connection when a tighter label is not justified.
+- adaptation_related is for cross-medium adaptations of the same core work.
+- unrelated means shared words, broad genres, or vibes are not enough.
+- uncertain only if the evidence is genuinely insufficient.
+
+Case:
+{stable_json(payload)}
+""".strip()
+
+
+def extract_json_object(text: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            parsed_dict = cast(dict[object, Any], parsed)
+            return {str(key): value for key, value in parsed_dict.items()}
+        return None
+    except json.JSONDecodeError:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+
+    try:
+        parsed = json.loads(text[start : end + 1])
+        if isinstance(parsed, dict):
+            parsed_dict = cast(dict[object, Any], parsed)
+            return {str(key): value for key, value in parsed_dict.items()}
+        return None
+    except json.JSONDecodeError:
+        return None
+
+
+def load_llm_candidates(candidates_path: Path) -> list[LlmRelationshipCandidate]:
+    candidates: list[LlmRelationshipCandidate] = []
+    for line in candidates_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        candidates.append(LlmRelationshipCandidate.model_validate_json(line))
+    return candidates
+
+
+def execute_llm_relationship_candidates(
+    *,
+    candidates_path: Path,
+    manifest_path: Path,
+    api_key: str,
+    base_url: str,
+    provider: str = DEFAULT_LLM_PROVIDER,
+    model: str = DEFAULT_LLM_MODEL,
+    recipe_version: str = DEFAULT_LLM_RECIPE_VERSION,
+    client: OpenAiClientLike | None = None,
+) -> LlmExecutionResult:
+    resolved_client = client or OpenAI(api_key=api_key, base_url=base_url)
+    candidates = load_llm_candidates(candidates_path)
+    decisions: list[LlmDecisionRecord] = []
+
+    for candidate in candidates:
+        try:
+            response = resolved_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "Return only valid JSON."},
+                    {"role": "user", "content": build_relationship_judgment_prompt(candidate)},
+                ],
+                temperature=0,
+                max_tokens=300,
+            )
+            content = response.choices[0].message.content or ""
+            parsed = extract_json_object(content)
+            if parsed is None:
+                decisions.append(
+                    LlmDecisionRecord(
+                        source_entity_id=candidate.source_entity_id,
+                        target_entity_id=candidate.target_entity_id,
+                        provider=provider,
+                        model=model,
+                        recipe_version=recipe_version,
+                        input_fingerprint=candidate.input_fingerprint,
+                        cache_key=candidate.cache_key,
+                        raw_response=content,
+                        status="parse_error",
+                        error_type="json_parse_error",
+                        error_message="Response did not contain a valid JSON object",
+                    )
+                )
+                continue
+
+            judgment = LlmRelationshipJudgment.model_validate(parsed)
+            decisions.append(
+                LlmDecisionRecord(
+                    source_entity_id=candidate.source_entity_id,
+                    target_entity_id=candidate.target_entity_id,
+                    provider=provider,
+                    model=model,
+                    recipe_version=recipe_version,
+                    input_fingerprint=candidate.input_fingerprint,
+                    cache_key=candidate.cache_key,
+                    raw_response=content,
+                    judgment=judgment,
+                    status="ok",
+                )
+            )
+        except Exception as exc:
+            decisions.append(
+                LlmDecisionRecord(
+                    source_entity_id=candidate.source_entity_id,
+                    target_entity_id=candidate.target_entity_id,
+                    provider=provider,
+                    model=model,
+                    recipe_version=recipe_version,
+                    input_fingerprint=candidate.input_fingerprint,
+                    cache_key=candidate.cache_key,
+                    status="api_error",
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                )
+            )
+
+    output_dir = manifest_path.parent
+    decisions_path = output_dir / "llm-judgment-decisions.jsonl"
+    summary_path = output_dir / "llm-judgment-execution-summary.json"
+
+    decisions_path.write_text(
+        "\n".join(decision.model_dump_json() for decision in decisions)
+        + ("\n" if decisions else ""),
+        encoding="utf-8",
+    )
+    summary_path.write_text(
+        json.dumps(
+            {
+                "candidate_count": len(candidates),
+                "executed_count": len(decisions),
+                "ok_count": sum(1 for decision in decisions if decision.status == "ok"),
+                "parse_error_count": sum(
+                    1 for decision in decisions if decision.status == "parse_error"
+                ),
+                "api_error_count": sum(1 for decision in decisions if decision.status == "api_error"),
+                "provider": provider,
+                "model": model,
+                "recipe_version": recipe_version,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _ensure_manifest_sidecars(
+        manifest_path,
+        entries=[
+            {"path": decisions_path.name, "format": "jsonl", "kind": "llm_judgment_decisions"},
+            {
+                "path": summary_path.name,
+                "format": "json",
+                "kind": "llm_judgment_execution_summary",
+            },
+        ],
+    )
+
+    return LlmExecutionResult(
+        manifest_path=manifest_path,
+        candidate_count=len(candidates),
+        executed_count=len(decisions),
+        decisions_path=decisions_path,
+        summary_path=summary_path,
+    )
+
+
+def apply_llm_relationship_judgments(
+    *,
+    manifest_path: Path,
+    decisions_path: Path,
+    min_confidence: float = 0.8,
+) -> LlmApplyResult:
+    files = _manifest_files(manifest_path)
+    relationships_path = files["relationships"]
+    relationship_frame = pl.read_parquet(relationships_path)
+
+    decisions: list[LlmDecisionRecord] = []
+    for line in decisions_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        decisions.append(LlmDecisionRecord.model_validate_json(line))
+
+    eligible_by_pair = {
+        (decision.source_entity_id, decision.target_entity_id): decision
+        for decision in decisions
+        if decision.status == "ok"
+        and decision.judgment is not None
+        and float(decision.judgment.confidence) >= min_confidence
+    }
+
+    applied_count = 0
+    unchanged_count = 0
+    updated_rows: list[dict[str, Any]] = []
+    for row in relationship_frame.iter_rows(named=True):
+        row_dict = dict(row)
+        decision = eligible_by_pair.get(
+            (str(row_dict["source_entity_id"]), str(row_dict["target_entity_id"]))
+        )
+        if decision is None or decision.judgment is None:
+            unchanged_count += 1
+            updated_rows.append(row_dict)
+            continue
+
+        new_relationship = decision.judgment.relationship.value
+        new_confidence = float(decision.judgment.confidence)
+        if (
+            str(row_dict["relationship"]) == new_relationship
+            and float(row_dict["relationship_confidence"]) == new_confidence
+        ):
+            unchanged_count += 1
+            updated_rows.append(row_dict)
+            continue
+
+        row_dict["relationship"] = new_relationship
+        row_dict["relationship_confidence"] = new_confidence
+        updated_rows.append(row_dict)
+        applied_count += 1
+
+    updated_frame = pl.DataFrame(updated_rows, schema=relationship_frame.schema)
+    updated_frame.write_parquet(relationships_path, compression="zstd")
+
+    summary_path = manifest_path.parent / "llm-judgment-apply-summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "manifest_path": str(manifest_path),
+                "decisions_path": str(decisions_path),
+                "relationship_count": relationship_frame.height,
+                "eligible_decision_count": len(eligible_by_pair),
+                "applied_count": applied_count,
+                "unchanged_count": unchanged_count,
+                "min_confidence": min_confidence,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _ensure_manifest_sidecars(
+        manifest_path,
+        entries=[
+            {
+                "path": summary_path.name,
+                "format": "json",
+                "kind": "llm_judgment_apply_summary",
+            }
+        ],
+    )
+
+    return LlmApplyResult(
+        manifest_path=manifest_path,
+        decisions_path=decisions_path,
+        relationship_count=relationship_frame.height,
+        eligible_decision_count=len(eligible_by_pair),
+        applied_count=applied_count,
+        unchanged_count=unchanged_count,
+        summary_path=summary_path,
+    )
+
+
+def _ensure_manifest_sidecars(manifest_path: Path, *, entries: list[dict[str, str]]) -> None:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    files = manifest["files"]
+    by_path = {str(entry["path"]): entry for entry in files}
+    for entry in entries:
+        if entry["path"] in by_path:
+            continue
+        files.append(entry)
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )

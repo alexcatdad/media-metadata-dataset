@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from huggingface_hub import HfApi
 from rich.console import Console
 
 from media_offline_database.anilist_concept_search import search_anime_by_concept
@@ -21,11 +22,28 @@ from media_offline_database.enrich_anilist_metadata import (
 from media_offline_database.enrich_anilist_relations import (
     write_anilist_relation_enriched_seed,
 )
+from media_offline_database.hf_publish import (
+    HF_REFRESH_STATE_PATH,
+    load_hf_refresh_state,
+    publish_checkpoint_bundle,
+    resolve_hf_repo_id,
+)
 from media_offline_database.ingest_anilist import write_anilist_search_seed
 from media_offline_database.ingest_manami import write_normalized_manami_seed
 from media_offline_database.llm import openai_compat_handshake, resolve_z_ai_api_key
+from media_offline_database.llm_enhancement import (
+    apply_llm_relationship_judgments,
+    execute_llm_relationship_candidates,
+    select_llm_relationship_candidates,
+    write_llm_candidate_plan,
+)
 from media_offline_database.query import build_query_preview, load_query_entities
+from media_offline_database.refresh import run_manami_refresh_checkpoint
 from media_offline_database.settings import Settings
+from media_offline_database.snapshot_finalize import (
+    materialize_current_snapshot,
+    publish_current_snapshot,
+)
 from media_offline_database.sources import SourceRole
 
 app = typer.Typer(help="Media Offline Database dataset compiler.")
@@ -215,6 +233,90 @@ AnimeBuildOutputDirOption = Annotated[
         help="Directory where the composed anime build outputs should be written.",
     ),
 ]
+HfRepoIdOption = Annotated[
+    str | None,
+    typer.Option(
+        "--repo-id",
+        help="Explicit Hugging Face dataset repo id like namespace/name.",
+    ),
+]
+HfPrivateOption = Annotated[
+    bool,
+    typer.Option(
+        "--private/--public",
+        help="Whether the target Hugging Face dataset repo should be private.",
+    ),
+]
+ManifestPathArgument = Annotated[
+    Path,
+    typer.Argument(
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Compiled artifact manifest to publish.",
+    ),
+]
+CheckpointPathOption = Annotated[
+    str,
+    typer.Option(
+        "--checkpoint-path",
+        help="Remote dataset path prefix for this artifact bundle.",
+    ),
+]
+RefreshJobNameOption = Annotated[
+    str,
+    typer.Option(
+        "--job-name",
+        help="Stable refresh job key used to resume checkpointed runs.",
+    ),
+]
+BatchSizeOption = Annotated[
+    int,
+    typer.Option(
+        "--batch-size",
+        min=1,
+        help="How many source candidates to process before checkpointing.",
+    ),
+]
+FinalizeOutputDirOption = Annotated[
+    Path,
+    typer.Option(
+        "--output-dir",
+        help="Directory where the canonical current/snapshot surface should be materialized.",
+    ),
+]
+PreviousManifestPathOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--previous-manifest-path",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional previous compiled manifest used to mark changed relationships.",
+    ),
+]
+CandidatesPathArgument = Annotated[
+    Path,
+    typer.Argument(
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="Prepared LLM candidate JSONL file.",
+    ),
+]
+DecisionPathArgument = Annotated[
+    Path,
+    typer.Argument(
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="LLM judgment decision JSONL file.",
+    ),
+]
 @app.callback()
 def main() -> None:
     """Compile and validate open media discovery datasets."""
@@ -337,6 +439,18 @@ def anime_build(
     output_dir: AnimeBuildOutputDirOption = DEFAULT_ANIME_BUILD_OUTPUT_DIR,
     limit: ManamiLimitOption = None,
     title_contains: ManamiTitleContainsOption = None,
+    start_offset: Annotated[
+        int,
+        typer.Option("--start-offset", min=0, help="Candidate offset to start from."),
+    ] = 0,
+    batch_size: Annotated[
+        int | None,
+        typer.Option(
+            "--batch-size",
+            min=1,
+            help="Optional batch size for checkpointed chunk builds.",
+        ),
+    ] = None,
 ) -> None:
     """Run the composed anime build pipeline from manami release to compiled artifact."""
 
@@ -345,9 +459,16 @@ def anime_build(
         output_dir=output_dir,
         limit=limit,
         title_contains=title_contains,
+        start_offset=start_offset,
+        batch_size=batch_size,
     )
     console.print(
         {
+            "snapshot_id": result.snapshot_id,
+            "start_offset": result.start_offset,
+            "end_offset": result.end_offset,
+            "next_offset": result.next_offset,
+            "total_candidates": result.total_candidates,
             "normalized_seed": str(result.normalized_seed_path),
             "relation_enriched_seed": str(result.relation_enriched_seed_path),
             "metadata_enriched_seed": str(result.metadata_enriched_seed_path),
@@ -420,6 +541,229 @@ def anilist_enrich_metadata(
         output_path=output_path,
     )
     console.print({"enriched_seed": str(enriched_path)})
+
+
+@app.command()
+def hf_publish(
+    manifest_path: ManifestPathArgument,
+    repo_id: HfRepoIdOption = None,
+    checkpoint_path: CheckpointPathOption = "checkpoints/manual",
+    private: HfPrivateOption = True,
+) -> None:
+    """Publish a compiled artifact bundle plus refresh state to a Hugging Face dataset repo."""
+
+    settings = Settings()
+    if not settings.hf_token:
+        raise typer.BadParameter("HF_TOKEN is required")
+
+    api = HfApi()
+    resolved_repo_id = resolve_hf_repo_id(
+        settings=settings,
+        api=api,
+        token=settings.hf_token,
+        repo_id=repo_id,
+    )
+    state = load_hf_refresh_state(
+        repo_id=resolved_repo_id,
+        token=settings.hf_token,
+    )
+    result = publish_checkpoint_bundle(
+        api=api,
+        token=settings.hf_token,
+        repo_id=resolved_repo_id,
+        manifest_path=manifest_path,
+        checkpoint_path=checkpoint_path,
+        state=state,
+        private=private,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command()
+def hf_state(
+    repo_id: HfRepoIdOption = None,
+) -> None:
+    """Read the current persisted refresh state from the Hugging Face dataset repo."""
+
+    settings = Settings()
+    if not settings.hf_token:
+        raise typer.BadParameter("HF_TOKEN is required")
+
+    api = HfApi()
+    resolved_repo_id = resolve_hf_repo_id(
+        settings=settings,
+        api=api,
+        token=settings.hf_token,
+        repo_id=repo_id,
+    )
+    state = load_hf_refresh_state(
+        repo_id=resolved_repo_id,
+        token=settings.hf_token,
+        state_path_in_repo=HF_REFRESH_STATE_PATH,
+    )
+    console.print_json(json=state.model_dump_json(indent=2))
+
+
+@app.command()
+def hf_finalize_current(
+    manifest_path: ManifestPathArgument,
+    snapshot_id: Annotated[
+        str,
+        typer.Option("--snapshot-id", help="Stable source snapshot identifier being finalized."),
+    ],
+    job_name: RefreshJobNameOption = "dataset.default",
+    repo_id: HfRepoIdOption = None,
+    private: HfPrivateOption = True,
+) -> None:
+    """Promote one compiled artifact bundle into a stable current snapshot surface on Hugging Face."""
+
+    settings = Settings()
+    if not settings.hf_token:
+        raise typer.BadParameter("HF_TOKEN is required")
+
+    api = HfApi()
+    resolved_repo_id = resolve_hf_repo_id(
+        settings=settings,
+        api=api,
+        token=settings.hf_token,
+        repo_id=repo_id,
+    )
+    state = load_hf_refresh_state(
+        repo_id=resolved_repo_id,
+        token=settings.hf_token,
+    )
+    result = publish_current_snapshot(
+        api=api,
+        token=settings.hf_token,
+        repo_id=resolved_repo_id,
+        manifest_path=manifest_path,
+        state=state,
+        job_name=job_name,
+        snapshot_id=snapshot_id,
+        private=private,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command()
+def materialize_current_snapshot_surface(
+    manifest_path: ManifestPathArgument,
+    snapshot_id: Annotated[
+        str,
+        typer.Option("--snapshot-id", help="Stable source snapshot identifier being finalized."),
+    ],
+    job_name: RefreshJobNameOption = "dataset.default",
+    output_dir: FinalizeOutputDirOption = Path(".mod/out/finalized-snapshots"),
+) -> None:
+    """Copy a compiled artifact bundle into stable local snapshot and current paths."""
+
+    result = materialize_current_snapshot(
+        manifest_path=manifest_path,
+        output_dir=output_dir,
+        job_name=job_name,
+        snapshot_id=snapshot_id,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command()
+def llm_prepare_candidates(
+    manifest_path: ManifestPathArgument,
+    previous_manifest_path: PreviousManifestPathOption = None,
+    confidence_threshold: Annotated[
+        float,
+        typer.Option(
+            "--confidence-threshold",
+            min=0.0,
+            max=1.0,
+            help="Only relationships below this confidence, or generic fallback edges, become candidates.",
+        ),
+    ] = 0.85,
+) -> None:
+    """Build a cross-domain LLM judgment candidate plan from compiled artifacts."""
+
+    candidates = select_llm_relationship_candidates(
+        manifest_path=manifest_path,
+        previous_manifest_path=previous_manifest_path,
+        confidence_threshold=confidence_threshold,
+    )
+    result = write_llm_candidate_plan(
+        manifest_path=manifest_path,
+        candidates=candidates,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command()
+def llm_execute_candidates(
+    candidates_path: CandidatesPathArgument,
+    manifest_path: ManifestPathArgument,
+) -> None:
+    """Execute provider-backed relationship judgments for prepared candidates."""
+
+    settings = Settings()
+    if not settings.openai_compat_api_key:
+        raise typer.BadParameter("OPENAI_COMPAT_API_KEY is required")
+
+    result = execute_llm_relationship_candidates(
+        candidates_path=candidates_path,
+        manifest_path=manifest_path,
+        api_key=settings.openai_compat_api_key,
+        base_url=settings.openai_compat_base_url,
+        provider="openrouter",
+        model=settings.openai_compat_default_model,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command()
+def llm_apply_judgments(
+    decisions_path: DecisionPathArgument,
+    manifest_path: ManifestPathArgument,
+    min_confidence: Annotated[
+        float,
+        typer.Option(
+            "--min-confidence",
+            min=0.0,
+            max=1.0,
+            help="Only apply successful LLM judgments at or above this confidence.",
+        ),
+    ] = 0.8,
+) -> None:
+    """Apply successful LLM relationship judgments back into the relationship artifact."""
+
+    result = apply_llm_relationship_judgments(
+        decisions_path=decisions_path,
+        manifest_path=manifest_path,
+        min_confidence=min_confidence,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command()
+def manami_refresh(
+    input_path: ManamiInputPathOption,
+    output_dir: AnimeBuildOutputDirOption = DEFAULT_ANIME_BUILD_OUTPUT_DIR,
+    repo_id: HfRepoIdOption = None,
+    job_name: RefreshJobNameOption = "anime.manami.default",
+    batch_size: BatchSizeOption = 100,
+    limit: ManamiLimitOption = None,
+    title_contains: ManamiTitleContainsOption = None,
+    private: HfPrivateOption = True,
+) -> None:
+    """Run one checkpointed manami batch and persist resume state to Hugging Face."""
+
+    result = run_manami_refresh_checkpoint(
+        release_path=input_path,
+        output_dir=output_dir,
+        repo_id=repo_id,
+        job_name=job_name,
+        batch_size=batch_size,
+        limit=limit,
+        title_contains=title_contains,
+        private_repo=private,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
 
 
 @app.command()

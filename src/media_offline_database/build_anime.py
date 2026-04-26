@@ -15,7 +15,11 @@ from media_offline_database.enrich_anilist_relations import (
     fetch_anilist_relations,
     write_anilist_relation_enriched_seed,
 )
-from media_offline_database.ingest_manami import write_normalized_manami_seed
+from media_offline_database.ingest_manami import (
+    load_manami_release,
+    manami_snapshot_id,
+    normalize_manami_release_batch,
+)
 
 DEFAULT_ANIME_BUILD_OUTPUT_DIR = Path(".mod/out/anime-build")
 
@@ -23,6 +27,12 @@ DEFAULT_ANIME_BUILD_OUTPUT_DIR = Path(".mod/out/anime-build")
 class AnimeBuildResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    snapshot_id: str
+    start_offset: int
+    end_offset: int
+    next_offset: int
+    total_candidates: int
+    last_completed_item_key: str | None = None
     normalized_seed_path: Path
     relation_enriched_seed_path: Path
     metadata_enriched_seed_path: Path
@@ -39,6 +49,8 @@ def build_manami_anime_artifact(
     artifact_output_dir: Path | None = None,
     limit: int | None = None,
     title_contains: str | None = None,
+    start_offset: int = 0,
+    batch_size: int | None = None,
     fetch_relations: AniListRelationFetcher = fetch_anilist_relations,
     fetch_metadata: AniListMetadataFetcher = fetch_anilist_metadata,
 ) -> AnimeBuildResult:
@@ -53,11 +65,21 @@ def build_manami_anime_artifact(
     )
     compiled_artifact_output_dir = artifact_output_dir or (output_dir / "compiled")
 
-    write_normalized_manami_seed(
-        release_path=release_path,
-        output_path=normalized_seed_path,
+    release = load_manami_release(release_path)
+    normalized_batch = normalize_manami_release_batch(
+        release,
+        start_offset=start_offset,
+        batch_size=batch_size,
         limit=limit,
         title_contains=title_contains,
+    )
+    normalized_seed_path.parent.mkdir(parents=True, exist_ok=True)
+    normalized_seed_path.write_text(
+        "\n".join(
+            entity.model_dump_json() for entity in normalized_batch.entities
+        )
+        + ("\n" if normalized_batch.entities else ""),
+        encoding="utf-8",
     )
     write_anilist_relation_enriched_seed(
         input_path=normalized_seed_path,
@@ -75,6 +97,12 @@ def build_manami_anime_artifact(
     )
 
     return AnimeBuildResult(
+        snapshot_id=manami_snapshot_id(release),
+        start_offset=normalized_batch.start_offset,
+        end_offset=normalized_batch.end_offset,
+        next_offset=normalized_batch.next_offset,
+        total_candidates=normalized_batch.total_candidates,
+        last_completed_item_key=normalized_batch.last_completed_item_key,
         normalized_seed_path=normalized_seed_path,
         relation_enriched_seed_path=relation_enriched_seed_path,
         metadata_enriched_seed_path=metadata_enriched_seed_path,

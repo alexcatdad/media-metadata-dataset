@@ -18,6 +18,7 @@ COPY docs ./docs
 COPY corpus ./corpus
 COPY benchmarks ./benchmarks
 COPY scripts ./scripts
+COPY .github ./.github
 
 RUN uv sync --frozen --extra dev
 
