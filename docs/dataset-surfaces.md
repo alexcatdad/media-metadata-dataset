@@ -444,7 +444,7 @@ Recipe inputs:
 - publishable source tags or normalized tag-derived facets where policy allows them;
 - `retrieval_text`, for text-derived candidate generation or explanations;
 - `embeddings`, for nearest-neighbor candidates tied to embedding recipe versions;
-- `llm_judgments` only through approved materialized surfaces or explicit judgment references;
+- `llm_judgments` only through approved materialized surfaces;
 - provenance, source snapshot, policy, and manifest metadata needed to audit inputs and versions.
 
 Recipes must exclude blocked, private, local-only, or non-publishable source values from public
