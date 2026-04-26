@@ -22,6 +22,24 @@ V1 should focus on stable, reusable surfaces:
 
 These surfaces should be useful even when some enrichment stages are incomplete.
 
+## Artifact Format Contract
+
+The canonical published dataset is a set of Parquet tables plus a manifest. Downstream systems
+should consume the dataset by reading the manifest and loading the referenced Parquet artifacts.
+
+The manifest should describe artifact paths, table names, schema versions, row counts, snapshot
+metadata, recipe versions, source coverage, and enrichment status. Parquet tables should carry the
+durable surfaces that external applications, notebooks, search indexes, graph loaders, or RAG
+pipelines can ingest.
+
+This project should not publish a hosted API, GraphQL endpoint, application-specific query service,
+or DuckDB database artifact as the consumption contract. Consumers can choose to load the Parquet
+artifacts into DuckDB, a database, a graph store, a search index, or an application-specific format,
+but those are downstream implementation choices.
+
+JSONL remains appropriate for append-only project records such as decisions, logs, fixtures, or
+debug traces. It is not the primary dataset consumption format.
+
 ## V1 Readiness Gate
 
 V1 is cross-domain. Anime can be the first implementation spine and can remain the richest early
@@ -71,6 +89,11 @@ snapshot metadata. Downstream consumers should be able to tell whether a record 
 only, facet-enhanced, judgment-enhanced, embedding-enhanced, or included in a derived enhancement
 recipe.
 
+Human review is a manual intervention path, not a required scheduled pipeline gate. The dataset
+should be able to run scheduled refresh and enhancement jobs without waiting on human approval.
+Manual corrections or reviews can still be captured as explicit judgment or correction artifacts
+when they exist.
+
 ## Shared Core And Domain Profiles
 
 The dataset should expose one shared core interface across media types, plus domain profiles for
@@ -98,11 +121,16 @@ Examples:
   shape where publishable.
 - `movie_profile`: runtime, release year/date, collection/franchise hints, and movie-specific
   release shape where publishable.
+- Future `book_profile`: source-material work metadata if and when books become a full domain.
 
 Cross-domain concepts such as setting, tone, cast life stage, themes, scope, duration, and source
 material should generally be modeled as facets when they can apply across domains. Domain-specific
 facts should remain in domain profiles when forcing them into the core would make the shared
 interface noisy or misleading.
+
+Books and source material can be represented as relationship evidence in v1. They should not become
+a full browse domain until a later accepted decision promotes books and defines a meaningful source
+path, profile surface, provider review, and progressive enhancement plan.
 
 ## Tags, Facets, And Judgments
 

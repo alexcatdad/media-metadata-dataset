@@ -23,9 +23,10 @@ query and retrieval workflows, not in bypassing provider rights or copying data 
 republished.
 
 The intended output is not an API, hosted recommendation service, search application, RAG
-application, graph browser, or consumption layer. It is a reusable dataset artifact. Other
-implementers may choose to build applications on top of it, but this project stops at compiling,
-versioning, publishing, and documenting the data.
+application, graph browser, DuckDB database artifact, or consumption layer. It is a reusable dataset
+artifact published as Parquet tables plus a manifest. Other implementers may choose to build
+applications on top of it, but this project stops at compiling, versioning, publishing, and
+documenting the data.
 
 ## Initial Scope
 
@@ -45,9 +46,10 @@ coverage from admissible sources, not only TV/movie-shaped anime records, identi
 future schema profiles.
 
 Books and source material may be used as relationship evidence, but books are not a full v1 browse
-domain. Music, games, podcasts, hosted APIs, direct applications, personalized recommendations,
-consumption layers, and copied closed-provider metadata remain out of scope unless later accepted
-decisions change that.
+domain. The schema should leave room for books to become a future progressive domain through a later
+accepted decision. Music, games, podcasts, hosted APIs, direct applications, personalized
+recommendations, consumption layers, and copied closed-provider metadata remain out of scope unless
+later accepted decisions change that.
 
 ## Core Problem
 
