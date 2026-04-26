@@ -5,7 +5,14 @@ An open, non-commercial dataset compiler for narrative screen media discovery.
 The project is in architecture/bootstrap stage. The current goal is to produce reusable,
 versioned datasets for anime, TV, and movies with source links, safe factual metadata, identity
 cross-references, relationship edges, embeddings, provenance, and auditable LLM-assisted judgments.
+The project produces data artifacts only; it is not an API, hosted service, application, or
+consumption layer.
 
+See [`docs/problem-statement.md`](docs/problem-statement.md) for the durable problem statement.
+See [`docs/dataset-surfaces.md`](docs/dataset-surfaces.md) for the intended artifact surfaces.
+Downstream-consumer personas:
+[`John`](docs/personas/john-downstream-app-developer.md) and
+[`Alex`](docs/personas/alex-anime-discovery.md).
 The initial PRD is treated as rough intent, not final product direction. Current decisions live in
 [`docs/decisions.jsonl`](docs/decisions.jsonl).
 
@@ -22,12 +29,17 @@ In scope first:
 - Hugging Face Dataset publication;
 - containerized local/CI execution.
 
+V1 is not considered complete with anime alone. It must include at least one meaningful anime source
+path, one meaningful TV source path, and one meaningful movie source path through the shared core
+schema.
+
 Out of scope for now:
 
 - music;
 - games, podcasts, and books as full browse domains;
 - copying closed provider metadata into public datasets;
 - hosted APIs or always-on services;
+- direct applications or consumption layers;
 - user-personalized recommendations.
 
 ## Execution Boundary
@@ -109,6 +121,8 @@ of:
 - `BLOCKED`
 
 See [`docs/source-admissibility-and-rate-limits.md`](docs/source-admissibility-and-rate-limits.md).
+See [`docs/runbooks/provider-review.md`](docs/runbooks/provider-review.md) before adding or changing
+provider use.
 See [`docs/model-selection.md`](docs/model-selection.md) for current free-access model choices.
 
 Canonical published runs should prefer open bulk downloads, public free tiers, and free/open model
@@ -160,6 +174,10 @@ docker compose run --rm app mod anime-build \
 The dataset continuity layer should live with the published dataset, not inside a CI runner.
 
 - Hugging Face dataset repos hold checkpoint artifacts and `state/refresh-state.json`.
+- Hugging Face dataset commits are physical snapshots of the published Parquet artifacts plus
+  manifest.
+- `main` is the moving latest pointer; supported releases should be tagged.
+- Exact consumers should pin a full Hugging Face commit SHA recorded in the manifest.
 - Each refresh job records progress by source snapshot plus stable batch offsets.
 - Partial checkpoint uploads are allowed; the next run resumes from the last persisted offset for
   that snapshot.

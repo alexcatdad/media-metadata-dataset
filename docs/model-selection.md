@@ -1,6 +1,6 @@
 # Model Selection
 
-Last reviewed: 2026-04-25.
+Last reviewed: 2026-04-26.
 
 The project prefers free-access model providers for canonical runs. This is not only a cost
 preference: it keeps the pipeline reproducible by ordinary contributors and avoids making public
@@ -8,6 +8,12 @@ artifacts look like privileged derivative works built from paid access.
 
 Free access does not make a provider legally safe by itself. Inputs must still be allowed by source
 policy, and all model calls must be cached, budgeted, and auditable.
+
+Local inference is the prompt-calibration baseline, not the canonical publication backend. The best
+model that runs reliably on the local Mac should be used as the measuring stick for relationship
+prompt and parameter tuning before comparing cloud variants. If clearer prompt wording lets smaller
+or lower-quality local models recover the same relevant relationship judgments as larger cloud
+models, prefer the clearer prompt over relying on more tokens or larger hosted models.
 
 ## Canonical Defaults
 
@@ -66,6 +72,8 @@ content is used to improve products.
 
 - Cache every model call by task, provider, model, prompt/input recipe version, and normalized input
   hash.
+- Tune prompt and inference parameters against the strongest practical local model first, then compare
+  cloud providers against that frozen local measuring-stick recipe.
 - Qualified rankings only include models whose provider contract marks them `qualified_for_ranking=true`
   for that task. Preview, discovery, unstable, unavailable, or task-misaligned models stay in
   exploration artifacts only.
