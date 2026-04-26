@@ -22,11 +22,12 @@ def test_v1_source_path_plan_names_distinct_non_anime_tv_and_movie_paths() -> No
 
     assert set(plan) == {MediaDomain.ANIME, MediaDomain.TV, MediaDomain.MOVIE}
     assert plan[MediaDomain.TV].source_id == "tvmaze"
-    assert plan[MediaDomain.MOVIE].source_id == "wikidata_movie_graph"
+    assert plan[MediaDomain.MOVIE].source_id == "wikidata"
     assert "anime" not in plan[MediaDomain.TV].source_id
     assert "anime" not in plan[MediaDomain.MOVIE].source_id
     assert "anime" in plan[MediaDomain.MOVIE].notes.lower()
-    assert plan[MediaDomain.TV].status == SourcePathStatus.WAITING_ON_POLICY_SCHEMA
+    assert plan[MediaDomain.TV].status == SourcePathStatus.EXECUTABLE_MILESTONE
+    assert plan[MediaDomain.MOVIE].status == SourcePathStatus.EXECUTABLE_MILESTONE
     assert plan[MediaDomain.MOVIE].provider_review_todos
 
 

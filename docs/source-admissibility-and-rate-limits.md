@@ -181,8 +181,8 @@ The v1 source path plan is locked around one meaningful source path per first-cl
 | Domain | Source path | Role | Publishable-field path | Status | Evidence |
 |---|---|---|---|---|---|
 | anime | manami anime-offline-database release assets | `BACKBONE_SOURCE` | Release-backed anime titles, crossrefs, related anime, type, episodes, season, status, and tags subject to field policy. | Locked. | [README/license](https://github.com/manami-project/anime-offline-database) |
-| TV | TVmaze show path | `BACKBONE_SOURCE` | TVmaze IDs, URLs, titles, status, dates, runtime, genres, network/web channel, and TV profile fields allowed by CC BY-SA field and artifact policy. | Waiting on source policy, field policy, artifact policy, and shared core/profile schema fixtures. | [TVmaze API](https://www.tvmaze.com/api) |
-| movie | Wikidata movie graph | `BACKBONE_SOURCE` | Wikidata QIDs, labels, aliases, publication dates, broad movie type facts, external IDs, adaptation links, and franchise links under CC0 policy. | Waiting on source policy, field policy, artifact policy, and shared core/profile schema fixtures. | [Wikidata licensing](https://www.wikidata.org/wiki/Wikidata:Licensing) |
+| TV | TVmaze show path | `BACKBONE_SOURCE` | TVmaze IDs, URLs, titles, status, dates, runtime, genres, network/web channel, and TV profile fields allowed by CC BY-SA field and artifact policy. | Executable milestone; richer profile/provenance surfaces still required before v1 publication. | [TVmaze API](https://www.tvmaze.com/api) |
+| movie | Wikidata movie graph | `BACKBONE_SOURCE` | Wikidata QIDs, labels, aliases, publication dates, broad movie type facts, external IDs, adaptation links, and franchise links under CC0 policy. | Executable milestone; richer profile/provenance surfaces still required before v1 publication. | [Wikidata licensing](https://www.wikidata.org/wiki/Wikidata:Licensing) |
 
 Anime TV series and anime movies are not counted as the required TV or movie source paths. TMDB may
 join the movie path as `ID_SOURCE` evidence only after field policy identifies which daily export

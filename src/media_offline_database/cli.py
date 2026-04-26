@@ -15,6 +15,14 @@ from media_offline_database.build_anime import (
     DEFAULT_ANIME_BUILD_OUTPUT_DIR,
     build_manami_anime_artifact,
 )
+from media_offline_database.build_movie import (
+    DEFAULT_WIKIDATA_MOVIE_BUILD_OUTPUT_DIR,
+    build_wikidata_movie_artifact,
+)
+from media_offline_database.build_tv import (
+    DEFAULT_TVMAZE_BUILD_OUTPUT_DIR,
+    build_tvmaze_tv_artifact,
+)
 from media_offline_database.corpus_concept_search import search_corpus_by_concept
 from media_offline_database.enrich_anilist_metadata import (
     write_anilist_metadata_enriched_seed,
@@ -61,6 +69,8 @@ DEFAULT_QUERY_TAG_LIMIT = 5
 DEFAULT_ANILIST_METADATA_ENRICHED_OUTPUT_PATH = Path(
     ".mod/out/manami-enriched/manami-enriched-metadata.jsonl"
 )
+DEFAULT_TVMAZE_SHOW_IDS = [1825]
+DEFAULT_WIKIDATA_MOVIE_QIDS = ["Q166262", "Q163872", "Q189330"]
 SmokeOutputDirOption = Annotated[
     Path,
     typer.Option(
@@ -232,6 +242,35 @@ AnimeBuildOutputDirOption = Annotated[
     typer.Option(
         "--output-dir",
         help="Directory where the composed anime build outputs should be written.",
+    ),
+]
+TVmazeBuildOutputDirOption = Annotated[
+    Path,
+    typer.Option(
+        "--output-dir",
+        help="Directory where the composed TVmaze build outputs should be written.",
+    ),
+]
+WikidataMovieBuildOutputDirOption = Annotated[
+    Path,
+    typer.Option(
+        "--output-dir",
+        help="Directory where the composed Wikidata movie build outputs should be written.",
+    ),
+]
+TVmazeShowIdOption = Annotated[
+    list[int] | None,
+    typer.Option(
+        "--show-id",
+        min=1,
+        help="TVmaze show ID to include. May be passed more than once.",
+    ),
+]
+WikidataMovieQidOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--qid",
+        help="Wikidata movie QID to include. May be passed more than once.",
     ),
 ]
 HfRepoIdOption = Annotated[
@@ -480,6 +519,48 @@ def anime_build(
             "normalized_seed": str(result.normalized_seed_path),
             "relation_enriched_seed": str(result.relation_enriched_seed_path),
             "metadata_enriched_seed": str(result.metadata_enriched_seed_path),
+            "manifest": str(result.manifest_path),
+        }
+    )
+
+
+@app.command()
+def tvmaze_build(
+    output_dir: TVmazeBuildOutputDirOption = DEFAULT_TVMAZE_BUILD_OUTPUT_DIR,
+    show_id: TVmazeShowIdOption = None,
+) -> None:
+    """Run the composed TV build pipeline from TVmaze shows to compiled artifact."""
+
+    result = build_tvmaze_tv_artifact(
+        show_ids=show_id or DEFAULT_TVMAZE_SHOW_IDS,
+        output_dir=output_dir,
+    )
+    console.print(
+        {
+            "snapshot_id": result.snapshot_id,
+            "total_candidates": result.total_candidates,
+            "normalized_seed": str(result.normalized_seed_path),
+            "manifest": str(result.manifest_path),
+        }
+    )
+
+
+@app.command()
+def wikidata_movie_build(
+    output_dir: WikidataMovieBuildOutputDirOption = DEFAULT_WIKIDATA_MOVIE_BUILD_OUTPUT_DIR,
+    qid: WikidataMovieQidOption = None,
+) -> None:
+    """Run the composed movie build pipeline from Wikidata movie QIDs to compiled artifact."""
+
+    result = build_wikidata_movie_artifact(
+        qids=qid or DEFAULT_WIKIDATA_MOVIE_QIDS,
+        output_dir=output_dir,
+    )
+    console.print(
+        {
+            "snapshot_id": result.snapshot_id,
+            "total_candidates": result.total_candidates,
+            "normalized_seed": str(result.normalized_seed_path),
             "manifest": str(result.manifest_path),
         }
     )

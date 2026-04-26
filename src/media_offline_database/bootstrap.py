@@ -182,6 +182,7 @@ def write_bootstrap_corpus_artifact(
     *,
     input_path: Path,
     output_dir: Path,
+    source_id: str = "bootstrap_seed",
     policy_inputs: Sequence[ArtifactInput] | None = None,
 ) -> Path:
     entities = load_bootstrap_entities(input_path)
@@ -195,7 +196,7 @@ def write_bootstrap_corpus_artifact(
                 column=column,
                 source_fields=[
                     SourceFieldReference(
-                        source_id="bootstrap_seed",
+                        source_id=source_id,
                         field_name=("sources" if column == "field_sources_json" else column),
                     )
                 ],
@@ -210,7 +211,7 @@ def write_bootstrap_corpus_artifact(
                 column=column,
                 source_fields=[
                     SourceFieldReference(
-                        source_id="bootstrap_seed",
+                        source_id=source_id,
                         field_name=column,
                     )
                 ],

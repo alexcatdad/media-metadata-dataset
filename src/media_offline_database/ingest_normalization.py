@@ -21,6 +21,7 @@ class SourcePathStatus(StrEnum):
 
     LOCKED = "locked"
     WAITING_ON_POLICY_SCHEMA = "waiting_on_policy_schema"
+    EXECUTABLE_MILESTONE = "executable_milestone"
 
 
 class ProvisionalSourcePathFieldClass(StrEnum):
@@ -181,7 +182,7 @@ def v1_source_path_plan() -> tuple[V1SourcePath, ...]:
             source_id="tvmaze",
             source_name="TVmaze",
             source_role=SourceRole.BACKBONE_SOURCE,
-            status=SourcePathStatus.WAITING_ON_POLICY_SCHEMA,
+            status=SourcePathStatus.EXECUTABLE_MILESTONE,
             publishable_fields=(
                 "tvmaze_id",
                 "url",
@@ -207,10 +208,10 @@ def v1_source_path_plan() -> tuple[V1SourcePath, ...]:
         ),
         V1SourcePath(
             domain=MediaDomain.MOVIE,
-            source_id="wikidata_movie_graph",
+            source_id="wikidata",
             source_name="Wikidata movie graph",
             source_role=SourceRole.BACKBONE_SOURCE,
-            status=SourcePathStatus.WAITING_ON_POLICY_SCHEMA,
+            status=SourcePathStatus.EXECUTABLE_MILESTONE,
             publishable_fields=(
                 "wikidata_qid",
                 "label",

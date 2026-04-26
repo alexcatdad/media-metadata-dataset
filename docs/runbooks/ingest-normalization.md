@@ -17,8 +17,8 @@ The locked v1 source paths are:
 | Domain | Source path | Role | Status | Public field path |
 |---|---|---|---|---|
 | anime | manami anime-offline-database release assets | `BACKBONE_SOURCE` | locked | release-backed anime titles, crossrefs, related anime, type, episodes, season, status, and tags subject to field policy |
-| TV | TVmaze show path | `BACKBONE_SOURCE` | waiting on policy/schema fixtures | TVmaze IDs, URLs, titles, status, dates, runtime, genres, network/web channel, and profile fields allowed by CC BY-SA policy |
-| movie | Wikidata movie graph | `BACKBONE_SOURCE` | waiting on policy/schema fixtures | Wikidata QIDs, labels, aliases, publication dates, broad type facts, external IDs, adaptation links, and franchise links under CC0 |
+| TV | TVmaze show path | `BACKBONE_SOURCE` | executable milestone | TVmaze IDs, URLs, titles, status, dates, runtime, genres, network/web channel, and profile fields allowed by CC BY-SA policy |
+| movie | Wikidata movie graph | `BACKBONE_SOURCE` | executable milestone | Wikidata QIDs, labels, aliases, publication dates, broad type facts, external IDs, adaptation links, and franchise links under CC0 |
 
 Anime TV series and anime movies do not count as the TV or movie source paths for v1.
 
@@ -53,7 +53,25 @@ docker compose build
 Run focused tests for this lane:
 
 ```sh
-docker compose run --rm app pytest tests/test_ingest_normalization.py tests/test_sources.py tests/test_docs_policy.py
+docker compose run --rm app pytest tests/test_ingest_normalization.py tests/test_ingest_tvmaze.py tests/test_ingest_wikidata_movies.py tests/test_sources.py tests/test_docs_policy.py
+```
+
+Run the first TVmaze milestone build without publishing:
+
+```sh
+docker compose run --rm app mod tvmaze-build \
+  --show-id 1825 \
+  --output-dir .mod/out/milestone-tvmaze-build-YYYY-MM-DD
+```
+
+Run the first Wikidata movie milestone build without publishing:
+
+```sh
+docker compose run --rm app mod wikidata-movie-build \
+  --qid Q166262 \
+  --qid Q163872 \
+  --qid Q189330 \
+  --output-dir .mod/out/milestone-wikidata-movie-build-YYYY-MM-DD
 ```
 
 Run the standard validation gates before pushing:
@@ -66,9 +84,9 @@ docker compose run --rm app pytest
 
 ## B-0009 And B-0010 Gate
 
-Do not implement public TV/movie artifact writers until B-0001 through B-0006 provide manifest,
-core/profile schema, source policy, field policy, artifact policy, and publishability validation
-fixtures.
+The first executable TV/movie milestone commands compile source-backed shared entity and relationship
+surfaces. They are enough to prove the source paths run in Docker, but the v1-quality artifact still
+needs profile, provenance, title, and external-ID table materialization before v1 can be declared.
 
 Before turning the TVmaze and Wikidata paths into public artifacts:
 
