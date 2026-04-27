@@ -72,6 +72,8 @@ Use this language:
 - Exact consumers should pin a full Hugging Face commit SHA recorded in the manifest.
 - The manifest bridges dataset version, schema versions, source snapshots, recipe versions, policy
   versions, row counts, and the physical Hugging Face revision.
+- Source snapshots and provider runs are exposed as manifest-linked Parquet tables, not only compact
+  manifest metadata.
 
 ### Source Policy And Publishability
 

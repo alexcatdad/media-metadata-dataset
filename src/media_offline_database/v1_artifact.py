@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
@@ -15,6 +16,12 @@ from media_offline_database.contracts import (
     CORE_SCHEMA_VERSION,
     CORE_TABLE_CONTRACTS,
     PROFILE_TABLE_CONTRACTS,
+)
+from media_offline_database.ingest_normalization import (
+    ProviderRun,
+    SourceSnapshot,
+    load_provider_runs,
+    load_source_snapshots,
 )
 from media_offline_database.publishability import (
     ARTIFACT_POLICY_VERSION,
@@ -45,15 +52,35 @@ def write_v1_core_artifact(
     input_paths: Sequence[Path],
     output_dir: Path = DEFAULT_V1_OUTPUT_DIR,
     source_snapshot_ids: Mapping[str, str] | None = None,
+    source_snapshot_paths: Sequence[Path] | None = None,
+    provider_run_paths: Sequence[Path] | None = None,
 ) -> Path:
     entities = _load_all_entities(input_paths)
+    source_snapshots = _load_source_snapshots_by_source(source_snapshot_paths)
+    provider_runs = _load_provider_runs_by_source(provider_run_paths)
     snapshot_ids = {
-        source_id: source_snapshot_ids.get(source_id, f"{source_id}:unspecified")
-        if source_snapshot_ids is not None
-        else f"{source_id}:unspecified"
+        source_id: _source_snapshot_id_for_source(
+            source_id,
+            source_snapshots=source_snapshots,
+            source_snapshot_ids=source_snapshot_ids,
+        )
         for source_id in _source_ids(entities)
     }
-    frames = _build_frames(entities, source_snapshot_ids=snapshot_ids)
+    provider_run_ids = {
+        source_id: _provider_run_id_for_source(
+            source_id,
+            source_snapshot_id=snapshot_ids[source_id],
+            provider_runs=provider_runs,
+        )
+        for source_id in _source_ids(entities)
+    }
+    frames = _build_frames(
+        entities,
+        source_snapshot_ids=snapshot_ids,
+        provider_run_ids=provider_run_ids,
+        source_snapshots=source_snapshots,
+        provider_runs=provider_runs,
+    )
     source_ids = _source_ids(entities)
     validation = validate_artifact_inputs(
         _artifact_inputs(frames.keys(), source_ids=source_ids),
@@ -139,10 +166,57 @@ def _load_all_entities(input_paths: Sequence[Path]) -> list[BootstrapEntity]:
     return sorted(entities, key=lambda entity: entity.entity_id)
 
 
+def _load_source_snapshots_by_source(
+    source_snapshot_paths: Sequence[Path] | None,
+) -> dict[str, SourceSnapshot]:
+    snapshots: dict[str, SourceSnapshot] = {}
+    for path in source_snapshot_paths or []:
+        for snapshot in load_source_snapshots(path):
+            snapshots[snapshot.source_id] = snapshot
+    return snapshots
+
+
+def _load_provider_runs_by_source(
+    provider_run_paths: Sequence[Path] | None,
+) -> dict[str, ProviderRun]:
+    provider_runs: dict[str, ProviderRun] = {}
+    for path in provider_run_paths or []:
+        for provider_run in load_provider_runs(path):
+            provider_runs[provider_run.source_id] = provider_run
+    return provider_runs
+
+
+def _source_snapshot_id_for_source(
+    source_id: str,
+    *,
+    source_snapshots: Mapping[str, SourceSnapshot],
+    source_snapshot_ids: Mapping[str, str] | None,
+) -> str:
+    if source_id in source_snapshots:
+        return source_snapshots[source_id].source_snapshot_id
+    if source_snapshot_ids is not None:
+        return source_snapshot_ids.get(source_id, f"{source_id}:unspecified")
+    return f"{source_id}:unspecified"
+
+
+def _provider_run_id_for_source(
+    source_id: str,
+    *,
+    source_snapshot_id: str,
+    provider_runs: Mapping[str, ProviderRun],
+) -> str:
+    if source_id in provider_runs:
+        return provider_runs[source_id].provider_run_id
+    return _provider_run_id(source_id, source_snapshot_id)
+
+
 def _build_frames(
     entities: Sequence[BootstrapEntity],
     *,
     source_snapshot_ids: Mapping[str, str],
+    provider_run_ids: Mapping[str, str],
+    source_snapshots: Mapping[str, SourceSnapshot],
+    provider_runs: Mapping[str, ProviderRun],
 ) -> dict[str, pl.DataFrame]:
     provenance_by_entity = {
         entity.entity_id: _provenance_id(_policy_source_id(entity.record_source), entity.entity_id)
@@ -159,11 +233,29 @@ def _build_frames(
         "facets": _frame("facets", _facet_rows(entities, provenance_by_entity)),
         "provenance": _frame(
             "provenance",
-            _provenance_rows(entities, provenance_by_entity, source_snapshot_ids),
+            _provenance_rows(
+                entities,
+                provenance_by_entity,
+                source_snapshot_ids,
+                provider_run_ids,
+            ),
+        ),
+        "source_snapshots": _frame(
+            "source_snapshots",
+            _source_snapshot_rows(entities, source_snapshot_ids, source_snapshots),
+        ),
+        "provider_runs": _frame(
+            "provider_runs",
+            _provider_run_rows(entities, source_snapshot_ids, provider_runs),
         ),
         "source_records": _frame(
             "source_records",
-            _source_record_rows(entities, provenance_by_entity, source_snapshot_ids),
+            _source_record_rows(
+                entities,
+                provenance_by_entity,
+                source_snapshot_ids,
+                provider_run_ids,
+            ),
         ),
         "anime_profile": _frame("anime_profile", _anime_profile_rows(entities, provenance_by_entity)),
         "tv_profile": _frame("tv_profile", _tv_profile_rows(entities, provenance_by_entity)),
@@ -345,6 +437,7 @@ def _provenance_rows(
     entities: Sequence[BootstrapEntity],
     provenance_by_entity: Mapping[str, str],
     source_snapshot_ids: Mapping[str, str],
+    provider_run_ids: Mapping[str, str],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for entity in entities:
@@ -353,9 +446,76 @@ def _provenance_rows(
                 "provenance_id": provenance_by_entity[entity.entity_id],
                 "source_id": _policy_source_id(entity.record_source),
                 "source_snapshot_id": source_snapshot_ids[_policy_source_id(entity.record_source)],
-                "provider_run_id": None,
+                "provider_run_id": provider_run_ids[_policy_source_id(entity.record_source)],
                 "recipe_run_id": V1_RECIPE_VERSION,
                 "policy_version": SOURCE_POLICY_VERSION,
+            }
+        )
+    return rows
+
+
+def _source_snapshot_rows(
+    entities: Sequence[BootstrapEntity],
+    source_snapshot_ids: Mapping[str, str],
+    source_snapshots: Mapping[str, SourceSnapshot],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for source_id, source_entities in _entities_by_source(entities).items():
+        if source_id in source_snapshots:
+            rows.append(_source_snapshot_model_row(source_snapshots[source_id]))
+            continue
+        snapshot_id = source_snapshot_ids[source_id]
+        fetched_at = _snapshot_datetime(snapshot_id)
+        rows.append(
+            {
+                "source_snapshot_id": snapshot_id,
+                "source_id": source_id,
+                "source_role": source_entities[0].source_role.value,
+                "snapshot_kind": _snapshot_kind(source_id),
+                "fetched_at": fetched_at,
+                "source_published_at": fetched_at if source_id == "manami" else None,
+                "fetch_window_started_at": None if source_id == "manami" else fetched_at,
+                "fetch_window_finished_at": None if source_id == "manami" else fetched_at,
+                "source_version": snapshot_id,
+                "policy_version": SOURCE_POLICY_VERSION,
+                "publishable_field_policy_version": SOURCE_FIELD_POLICY_VERSION,
+                "artifact_policy_version": ARTIFACT_POLICY_VERSION,
+                "record_count": len(source_entities),
+                "content_hash": _source_content_hash(source_entities),
+                "manifest_uri": None,
+                "notes": "Generated by v1 artifact writer from normalized source-backed rows.",
+            }
+        )
+    return rows
+
+
+def _provider_run_rows(
+    entities: Sequence[BootstrapEntity],
+    source_snapshot_ids: Mapping[str, str],
+    provider_runs: Mapping[str, ProviderRun],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for source_id, source_entities in _entities_by_source(entities).items():
+        if source_id in provider_runs:
+            rows.append(_provider_run_model_row(provider_runs[source_id]))
+            continue
+        snapshot_id = source_snapshot_ids[source_id]
+        run_at = _snapshot_datetime(snapshot_id)
+        rows.append(
+            {
+                "provider_run_id": _provider_run_id(source_id, snapshot_id),
+                "source_id": source_id,
+                "source_snapshot_id": snapshot_id,
+                "adapter_name": _adapter_name(source_id),
+                "adapter_version": _adapter_version(source_id),
+                "started_at": run_at,
+                "finished_at": run_at,
+                "request_count": _request_count(source_id, source_entities),
+                "cache_hit_count": 0,
+                "status": "completed",
+                "auth_shape": "none",
+                "secret_refs": [],
+                "notes": "No secret values or restricted payloads are stored in provider run metadata.",
             }
         )
     return rows
@@ -365,6 +525,7 @@ def _source_record_rows(
     entities: Sequence[BootstrapEntity],
     provenance_by_entity: Mapping[str, str],
     source_snapshot_ids: Mapping[str, str],
+    provider_run_ids: Mapping[str, str],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for entity in entities:
@@ -376,7 +537,7 @@ def _source_record_rows(
                 "source_id": _policy_source_id(entity.record_source),
                 "source_record_id": source_record_id,
                 "source_snapshot_id": source_snapshot_ids[_policy_source_id(entity.record_source)],
-                "provider_run_id": None,
+                "provider_run_id": provider_run_ids[_policy_source_id(entity.record_source)],
                 "source_role": entity.source_role.value,
                 "source_url": entity.canonical_source,
                 "source_record_hash": _stable_hash(entity.model_dump_json()),
@@ -467,6 +628,8 @@ def _polars_dtype(dtype: str) -> pl.DataType:
             return pl.String()
         case "int64":
             return pl.Int64()
+        case "datetime":
+            return pl.Datetime(time_zone="UTC")
         case "date":
             return pl.Date()
         case "list[string]":
@@ -551,9 +714,18 @@ def _contract_policy_versions() -> dict[str, str]:
 
 
 def _table_enrichment_status(table_name: str) -> str:
+    if table_name in {"source_snapshots", "provider_runs"}:
+        return "source-metadata"
     if table_name in {"anime_profile", "tv_profile", "movie_profile", "facets"}:
         return "source-derived"
     return "source-ingested"
+
+
+def _entities_by_source(entities: Sequence[BootstrapEntity]) -> dict[str, list[BootstrapEntity]]:
+    grouped: dict[str, list[BootstrapEntity]] = defaultdict(list)
+    for entity in entities:
+        grouped[_policy_source_id(entity.record_source)].append(entity)
+    return dict(sorted(grouped.items()))
 
 
 def _source_ids(entities: Sequence[BootstrapEntity]) -> list[str]:
@@ -574,6 +746,10 @@ def _stable_hash(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
+def _stable_full_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _provenance_id(source_id: str, entity_id: str) -> str:
     return _stable_id("provenance", source_id, entity_id)
 
@@ -591,3 +767,64 @@ def _tag_value(tags: Sequence[str], prefix: str) -> str | None:
         if tag.startswith(prefix):
             return tag.removeprefix(prefix)
     return None
+
+
+def _provider_run_id(source_id: str, source_snapshot_id: str) -> str:
+    return _stable_id("provider-run", source_id, source_snapshot_id, V1_RECIPE_VERSION)
+
+
+def _snapshot_datetime(source_snapshot_id: str) -> datetime:
+    date_part = source_snapshot_id.rsplit(":", maxsplit=1)[-1]
+    try:
+        return datetime.fromisoformat(date_part).replace(tzinfo=UTC)
+    except ValueError:
+        return datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _snapshot_kind(source_id: str) -> str:
+    if source_id == "manami":
+        return "release_file"
+    if source_id == "wikidata":
+        return "sparql_query_window"
+    return "api_fetch_window"
+
+
+def _adapter_name(source_id: str) -> str:
+    return {
+        "manami": "manami-release-normalizer",
+        "tvmaze": "tvmaze-show-normalizer",
+        "wikidata": "wikidata-movie-normalizer",
+    }.get(source_id, f"{source_id}-normalizer")
+
+
+def _adapter_version(source_id: str) -> str:
+    return {
+        "manami": "manami-bootstrap-v1",
+        "tvmaze": "tvmaze-bootstrap-v1",
+        "wikidata": "wikidata-movie-bootstrap-v1",
+    }.get(source_id, V1_RECIPE_VERSION)
+
+
+def _request_count(source_id: str, entities: Sequence[BootstrapEntity]) -> int:
+    if source_id == "manami":
+        return 0
+    return len(entities)
+
+
+def _source_content_hash(entities: Sequence[BootstrapEntity]) -> str:
+    payload = "\n".join(
+        entity.model_dump_json() for entity in sorted(entities, key=lambda item: item.entity_id)
+    )
+    return _stable_full_hash(payload)
+
+
+def _source_snapshot_model_row(snapshot: SourceSnapshot) -> dict[str, object]:
+    row = snapshot.model_dump(mode="python")
+    row["source_role"] = snapshot.source_role.value
+    return row
+
+
+def _provider_run_model_row(provider_run: ProviderRun) -> dict[str, object]:
+    row = provider_run.model_dump(mode="python")
+    row["secret_refs"] = list(provider_run.secret_refs)
+    return row

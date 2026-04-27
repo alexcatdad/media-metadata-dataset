@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -20,8 +21,21 @@ from media_offline_database.ingest_manami import (
     manami_snapshot_id,
     normalize_manami_release_batch,
 )
+from media_offline_database.ingest_normalization import (
+    ProviderRun,
+    SourceSnapshot,
+    write_provider_runs,
+    write_source_snapshots,
+)
+from media_offline_database.publishability import (
+    ARTIFACT_POLICY_VERSION,
+    SOURCE_FIELD_POLICY_VERSION,
+    SOURCE_POLICY_VERSION,
+)
+from media_offline_database.sources import SourceRole
 
 DEFAULT_ANIME_BUILD_OUTPUT_DIR = Path(".mod/out/anime-build")
+MANAMI_ADAPTER_VERSION = "manami-bootstrap-v1"
 
 
 class AnimeBuildResult(BaseModel):
@@ -36,6 +50,8 @@ class AnimeBuildResult(BaseModel):
     normalized_seed_path: Path
     relation_enriched_seed_path: Path
     metadata_enriched_seed_path: Path
+    source_snapshot_path: Path
+    provider_run_path: Path
     manifest_path: Path
 
 
@@ -63,8 +79,11 @@ def build_manami_anime_artifact(
     metadata_enriched_seed_path = metadata_enriched_output_path or (
         output_dir / "metadata-enriched" / "manami-enriched-metadata.jsonl"
     )
+    source_snapshot_path = output_dir / "source-metadata" / "source-snapshots.jsonl"
+    provider_run_path = output_dir / "source-metadata" / "provider-runs.jsonl"
     compiled_artifact_output_dir = artifact_output_dir or (output_dir / "compiled")
 
+    started_at = datetime.now(tz=UTC)
     release = load_manami_release(release_path)
     normalized_batch = normalize_manami_release_batch(
         release,
@@ -95,6 +114,47 @@ def build_manami_anime_artifact(
         input_path=metadata_enriched_seed_path,
         output_dir=compiled_artifact_output_dir,
     )
+    finished_at = datetime.now(tz=UTC)
+    fetched_at = _datetime_from_date(manami_snapshot_id(release))
+    write_source_snapshots(
+        source_snapshot_path,
+        [
+            SourceSnapshot(
+                source_snapshot_id=f"manami:{manami_snapshot_id(release)}",
+                source_id="manami",
+                source_role=SourceRole.BACKBONE_SOURCE,
+                snapshot_kind="release_file",
+                fetched_at=fetched_at,
+                source_published_at=fetched_at,
+                source_version=manami_snapshot_id(release),
+                policy_version=SOURCE_POLICY_VERSION,
+                publishable_field_policy_version=SOURCE_FIELD_POLICY_VERSION,
+                artifact_policy_version=ARTIFACT_POLICY_VERSION,
+                record_count=len(normalized_batch.entities),
+                manifest_uri=str(release_path),
+                notes="manami release normalized without provider credentials.",
+            )
+        ],
+    )
+    write_provider_runs(
+        provider_run_path,
+        [
+            ProviderRun(
+                provider_run_id=f"provider-run:manami:{manami_snapshot_id(release)}",
+                source_id="manami",
+                source_snapshot_id=f"manami:{manami_snapshot_id(release)}",
+                adapter_name="manami-release-normalizer",
+                adapter_version=MANAMI_ADAPTER_VERSION,
+                started_at=started_at,
+                finished_at=finished_at,
+                request_count=0,
+                cache_hit_count=0,
+                status="completed",
+                auth_shape="none",
+                notes="Local release-file normalization; no secret values involved.",
+            )
+        ],
+    )
 
     return AnimeBuildResult(
         snapshot_id=manami_snapshot_id(release),
@@ -106,5 +166,11 @@ def build_manami_anime_artifact(
         normalized_seed_path=normalized_seed_path,
         relation_enriched_seed_path=relation_enriched_seed_path,
         metadata_enriched_seed_path=metadata_enriched_seed_path,
+        source_snapshot_path=source_snapshot_path,
+        provider_run_path=provider_run_path,
         manifest_path=manifest_path,
     )
+
+
+def _datetime_from_date(value: str) -> datetime:
+    return datetime.fromisoformat(value).replace(tzinfo=UTC)

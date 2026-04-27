@@ -18,6 +18,12 @@ Use bootstrap-like JSONL seeds produced by accepted backbone source paths:
 - TVmaze normalized seed;
 - Wikidata movie normalized seed.
 
+Release-intended builds should also consume the source metadata sidecars emitted by those build
+commands:
+
+- `source-metadata/source-snapshots.jsonl`
+- `source-metadata/provider-runs.jsonl`
+
 ## Command
 
 ```sh
@@ -25,13 +31,16 @@ docker compose run --rm app mod v1-core-artifact \
   --input-path .mod/out/milestone-anime-build-YYYY-MM-DD/metadata-enriched/manami-enriched-metadata.jsonl \
   --input-path .mod/out/milestone-tvmaze-build-YYYY-MM-DD/normalized/tvmaze-normalized.jsonl \
   --input-path .mod/out/milestone-wikidata-movie-build-YYYY-MM-DD/normalized/wikidata-movie-normalized.jsonl \
-  --source-snapshot-id manami=manami:YYYY-MM-DD \
-  --source-snapshot-id tvmaze=tvmaze:YYYY-MM-DD \
-  --source-snapshot-id wikidata=wikidata:YYYY-MM-DD \
+  --source-snapshot-path .mod/out/milestone-anime-build-YYYY-MM-DD/source-metadata/source-snapshots.jsonl \
+  --source-snapshot-path .mod/out/milestone-tvmaze-build-YYYY-MM-DD/source-metadata/source-snapshots.jsonl \
+  --source-snapshot-path .mod/out/milestone-wikidata-movie-build-YYYY-MM-DD/source-metadata/source-snapshots.jsonl \
+  --provider-run-path .mod/out/milestone-anime-build-YYYY-MM-DD/source-metadata/provider-runs.jsonl \
+  --provider-run-path .mod/out/milestone-tvmaze-build-YYYY-MM-DD/source-metadata/provider-runs.jsonl \
+  --provider-run-path .mod/out/milestone-wikidata-movie-build-YYYY-MM-DD/source-metadata/provider-runs.jsonl \
   --output-dir .mod/out/milestone-v1-core-YYYY-MM-DD
 ```
 
-Release-intended builds must pass explicit `--source-snapshot-id` values. Builds with
+`--source-snapshot-id source=snapshot` remains available as a compatibility fallback. Builds with
 `*:unspecified` snapshot IDs are acceptable smoke runs, but they are not release-ready.
 
 ## Release Readiness
@@ -43,8 +52,8 @@ docker compose run --rm app mod validate-release-readiness \
 
 The readiness gate validates the v1 manifest identity, publishability policy, required anime/TV/movie
 source coverage, source snapshot IDs, manifest/table/file consistency, physical Parquet row counts,
-required columns, and meaningful per-domain rows before current materialization or Hugging Face
-publication.
+required columns, source snapshot/provider run joinability, and meaningful per-domain rows before
+current materialization or Hugging Face publication.
 
 ## Local Current Snapshot
 
@@ -73,6 +82,8 @@ docker compose run --rm app uv run pytest
 - `relationship_evidence`
 - `facets`
 - `provenance`
+- `source_snapshots`
+- `provider_runs`
 - `source_records`
 - `anime_profile`
 - `tv_profile`

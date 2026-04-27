@@ -175,6 +175,23 @@ def test_v1_release_readiness_rejects_wrong_columns(tmp_path: Path) -> None:
     assert "columns_mismatch" in {finding.code for finding in report.findings}
 
 
+def test_v1_release_readiness_rejects_unjoined_source_snapshot_ref(tmp_path: Path) -> None:
+    manifest_path = _write_ready_artifact(tmp_path)
+    source_records_path = manifest_path.parent / "source_records.parquet"
+    source_records = pl.read_parquet(source_records_path).with_columns(
+        pl.when(pl.col("source_id") == "tvmaze")
+        .then(pl.lit("tvmaze:missing"))
+        .otherwise(pl.col("source_snapshot_id"))
+        .alias("source_snapshot_id")
+    )
+    source_records.write_parquet(source_records_path)
+
+    report = validate_release_readiness(manifest_path)
+
+    assert not report.ready
+    assert "source_snapshot_join_missing" in {finding.code for finding in report.findings}
+
+
 def test_validate_release_readiness_cli_exits_nonzero_for_unready_v1(tmp_path: Path) -> None:
     seed_path = _write_seed(tmp_path / "seed.jsonl", _seed_entities())
     manifest_path = write_v1_core_artifact(input_paths=[seed_path], output_dir=tmp_path / "out")

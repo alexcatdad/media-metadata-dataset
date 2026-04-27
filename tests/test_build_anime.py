@@ -10,6 +10,7 @@ from media_offline_database.build_anime import build_manami_anime_artifact
 from media_offline_database.cli import app
 from media_offline_database.enrich_anilist_metadata import AniListResolvedMetadata
 from media_offline_database.enrich_anilist_relations import AniListResolvedRelation
+from media_offline_database.ingest_normalization import load_provider_runs, load_source_snapshots
 
 runner = CliRunner()
 
@@ -101,6 +102,8 @@ def test_build_manami_anime_artifact_runs_full_pipeline(tmp_path: Path) -> None:
     normalized_entities = load_bootstrap_entities(result.normalized_seed_path)
     relation_entities = load_bootstrap_entities(result.relation_enriched_seed_path)
     metadata_entities = load_bootstrap_entities(result.metadata_enriched_seed_path)
+    source_snapshots = load_source_snapshots(result.source_snapshot_path)
+    provider_runs = load_provider_runs(result.provider_run_path)
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
 
     assert relation_fetch_calls == [97986, 109911]
@@ -111,6 +114,10 @@ def test_build_manami_anime_artifact_runs_full_pipeline(tmp_path: Path) -> None:
     assert result.next_offset == 2
     assert result.total_candidates == 2
     assert result.last_completed_item_key == "anime:manami:anidb:14177"
+    assert source_snapshots[0].source_snapshot_id == "manami:2026-04-25"
+    assert source_snapshots[0].record_count == 2
+    assert provider_runs[0].source_snapshot_id == source_snapshots[0].source_snapshot_id
+    assert provider_runs[0].secret_refs == ()
 
     assert normalized_entities[0].related[0].relationship == "related_anime"
     assert len(relation_entities[0].related) == 1

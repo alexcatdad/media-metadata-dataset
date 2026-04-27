@@ -66,7 +66,19 @@ def test_snapshot_compatibility_prefers_table_metadata_for_v1_manifests(
                         "path": "entities.parquet",
                         "schema_version": "1.0.0",
                         "compatibility_tier": "core",
-                    }
+                    },
+                    {
+                        "table_name": "source_snapshots",
+                        "path": "source_snapshots.parquet",
+                        "schema_version": "1.0.0",
+                        "compatibility_tier": "core",
+                    },
+                    {
+                        "table_name": "provider_runs",
+                        "path": "provider_runs.parquet",
+                        "schema_version": "1.0.0",
+                        "compatibility_tier": "core",
+                    },
                 ],
             }
         ),
@@ -91,8 +103,13 @@ def test_snapshot_compatibility_prefers_table_metadata_for_v1_manifests(
     )
 
     assert not report.compatible
-    assert report.findings[0].code == "table_removed"
-    assert report.findings[0].tier == "core"
+    assert {finding.table for finding in report.findings} == {
+        "entities",
+        "source_snapshots",
+        "provider_runs",
+    }
+    assert {finding.code for finding in report.findings} == {"table_removed"}
+    assert {finding.tier for finding in report.findings} == {"core"}
 
 
 def test_snapshot_compatibility_reports_profile_derived_and_experimental(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
@@ -10,6 +11,12 @@ from typer.testing import CliRunner
 from media_offline_database.bootstrap import BootstrapEntity, BootstrapRelatedEdge
 from media_offline_database.cli import app
 from media_offline_database.contracts import CORE_TABLE_CONTRACTS, PROFILE_TABLE_CONTRACTS
+from media_offline_database.ingest_normalization import (
+    ProviderRun,
+    SourceSnapshot,
+    write_provider_runs,
+    write_source_snapshots,
+)
 from media_offline_database.publishability import PublishabilityError
 from media_offline_database.sources import SourceRole
 from media_offline_database.v1_artifact import write_v1_core_artifact
@@ -111,6 +118,8 @@ def test_v1_core_artifact_emits_contract_tables(tmp_path: Path) -> None:
         "relationship_evidence",
         "facets",
         "provenance",
+        "source_snapshots",
+        "provider_runs",
         "source_records",
         "anime_profile",
         "tv_profile",
@@ -129,6 +138,18 @@ def test_v1_core_artifact_emits_contract_tables(tmp_path: Path) -> None:
         frame = pl.read_parquet(manifest_path.parent / files[table_name]["path"])
         expected_columns = [column.name for column in contracts[table_name].columns]
         assert frame.columns == expected_columns
+
+    source_records = pl.read_parquet(manifest_path.parent / files["source_records"]["path"])
+    provenance = pl.read_parquet(manifest_path.parent / files["provenance"]["path"])
+    source_snapshots = pl.read_parquet(manifest_path.parent / files["source_snapshots"]["path"])
+    provider_runs = pl.read_parquet(manifest_path.parent / files["provider_runs"]["path"])
+    snapshot_ids = set(source_snapshots.get_column("source_snapshot_id").to_list())
+    provider_run_ids = set(provider_runs.get_column("provider_run_id").to_list())
+    assert set(source_records.get_column("source_snapshot_id").to_list()) <= snapshot_ids
+    assert set(provenance.get_column("source_snapshot_id").to_list()) <= snapshot_ids
+    assert set(source_records.get_column("provider_run_id").to_list()) <= provider_run_ids
+    assert set(provenance.get_column("provider_run_id").to_list()) <= provider_run_ids
+    assert provider_runs.get_column("secret_refs").to_list() == [[], [], []]
 
 
 def test_v1_core_artifact_expands_titles_profiles_and_evidence(tmp_path: Path) -> None:
@@ -158,6 +179,56 @@ def test_v1_core_artifact_expands_titles_profiles_and_evidence(tmp_path: Path) -
     )
 
 
+def test_v1_core_artifact_consumes_source_metadata_sidecars(tmp_path: Path) -> None:
+    seed_path = _write_seed(tmp_path / "seed.jsonl", [_seed_entities()[1]])
+    source_snapshot_path = write_source_snapshots(
+        tmp_path / "source-snapshots.jsonl",
+        [
+            SourceSnapshot(
+                source_snapshot_id="tvmaze:sidecar",
+                source_id="tvmaze",
+                source_role=SourceRole.BACKBONE_SOURCE,
+                snapshot_kind="api_fetch_window",
+                fetched_at=datetime(2026, 4, 26, tzinfo=UTC),
+                policy_version="source-policy-v1",
+                publishable_field_policy_version="source-field-policy-v1",
+                artifact_policy_version="artifact-policy-v1",
+                record_count=1,
+            )
+        ],
+    )
+    provider_run_path = write_provider_runs(
+        tmp_path / "provider-runs.jsonl",
+        [
+            ProviderRun(
+                provider_run_id="provider-run:tvmaze:sidecar",
+                source_id="tvmaze",
+                source_snapshot_id="tvmaze:sidecar",
+                adapter_name="tvmaze-show-normalizer",
+                adapter_version="tvmaze-bootstrap-v1",
+                started_at=datetime(2026, 4, 26, tzinfo=UTC),
+                finished_at=datetime(2026, 4, 26, tzinfo=UTC),
+                request_count=1,
+                status="completed",
+                auth_shape="none",
+            )
+        ],
+    )
+
+    manifest_path = write_v1_core_artifact(
+        input_paths=[seed_path],
+        output_dir=tmp_path / "out",
+        source_snapshot_paths=[source_snapshot_path],
+        provider_run_paths=[provider_run_path],
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    files = {file["kind"]: file for file in manifest["files"]}
+    source_records = pl.read_parquet(manifest_path.parent / files["source_records"]["path"])
+
+    assert manifest["source_coverage"][0]["source_snapshot_id"] == "tvmaze:sidecar"
+    assert source_records.item(0, "provider_run_id") == "provider-run:tvmaze:sidecar"
+
+
 def test_v1_core_artifact_rejects_local_evidence_public_rows(tmp_path: Path) -> None:
     local_entity = BootstrapEntity(
         entity_id="movie:tmdb:1",
@@ -182,3 +253,5 @@ def test_v1_core_artifact_cli_exposes_command() -> None:
     assert result.exit_code == 0
     assert "v1 shared core" in result.stdout
     assert "--source-snapshot-id" in result.stdout
+    assert "--source-snapshot-path" in result.stdout
+    assert "--provider-run-path" in result.stdout

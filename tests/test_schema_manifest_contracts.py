@@ -167,6 +167,8 @@ def test_core_table_contracts_cover_required_public_surfaces() -> None:
         "facets",
         "judgments",
         "provenance",
+        "source_snapshots",
+        "provider_runs",
         "source_records",
     }
 
@@ -175,7 +177,10 @@ def test_core_table_contracts_cover_required_public_surfaces() -> None:
         contract = CORE_TABLE_CONTRACTS[table_name]
         assert contract.schema_version == CORE_SCHEMA_VERSION
         assert contract.compatibility_tier in {CompatibilityTier.CORE, CompatibilityTier.DERIVED}
-        assert "recipe_version" in contract.required_column_names or table_name == "provenance"
+        assert (
+            "recipe_version" in contract.required_column_names
+            or table_name in {"provenance", "source_snapshots", "provider_runs"}
+        )
 
 
 def test_core_contracts_expose_lightweight_trust_signals() -> None:
@@ -193,6 +198,45 @@ def test_core_contracts_expose_lightweight_trust_signals() -> None:
         assert required in relationships
     assert "field_level_provenance" not in entities
     assert "field_level_provenance" not in relationships
+
+
+def test_source_metadata_contracts_expose_snapshot_and_run_audit_fields() -> None:
+    source_snapshots = CORE_TABLE_CONTRACTS["source_snapshots"].required_column_names
+    provider_runs = CORE_TABLE_CONTRACTS["provider_runs"].required_column_names
+
+    for required in {
+        "source_snapshot_id",
+        "source_id",
+        "source_role",
+        "snapshot_kind",
+        "fetched_at",
+        "policy_version",
+        "publishable_field_policy_version",
+        "artifact_policy_version",
+    }:
+        assert required in source_snapshots
+    for optional in {
+        "source_published_at",
+        "fetch_window_started_at",
+        "fetch_window_finished_at",
+        "record_count",
+        "content_hash",
+        "manifest_uri",
+    }:
+        assert optional in {column.name for column in CORE_TABLE_CONTRACTS["source_snapshots"].columns}
+
+    for required in {
+        "provider_run_id",
+        "source_id",
+        "adapter_name",
+        "adapter_version",
+        "started_at",
+        "request_count",
+        "cache_hit_count",
+        "status",
+        "secret_refs",
+    }:
+        assert required in provider_runs
 
 
 def test_profile_contracts_are_independently_versioned() -> None:

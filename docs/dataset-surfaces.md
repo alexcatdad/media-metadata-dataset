@@ -18,7 +18,11 @@ V1 should focus on stable, reusable surfaces:
 - `embeddings`: recipe-versioned vectors for supported retrieval text or facet bundles.
 - `llm_judgments`: auditable model-assisted judgments for ambiguous cases.
 - `provenance`: separate joinable source, fetch, policy, and transformation metadata.
-- `manifest`: artifact files, row counts, schema versions, recipe versions, and snapshot metadata.
+- `source_records`: row-level links back to source records.
+- `source_snapshots`: source version, fetch window, policy, and count metadata.
+- `provider_runs`: adapter execution metadata without secrets or restricted payloads.
+- `manifest`: artifact files, row counts, schema versions, recipe versions, and compact snapshot
+  coverage metadata.
 
 These surfaces should be useful even when some enrichment stages are incomplete.
 
@@ -27,10 +31,9 @@ These surfaces should be useful even when some enrichment stages are incomplete.
 The canonical published dataset is a set of Parquet tables plus a manifest. Downstream systems
 should consume the dataset by reading the manifest and loading the referenced Parquet artifacts.
 
-The manifest should describe artifact paths, table names, schema versions, row counts, snapshot
-metadata, recipe versions, source coverage, and enrichment status. Parquet tables should carry the
-durable surfaces that external applications, notebooks, search indexes, graph loaders, or RAG
-pipelines can ingest.
+The manifest should describe artifact paths, table names, schema versions, row counts, source
+snapshot IDs, recipe versions, source coverage, and enrichment status. Full source snapshot and
+provider-run audit detail lives in Parquet tables so consumers can query it directly.
 
 This project should not publish a hosted API, GraphQL endpoint, application-specific query service,
 or DuckDB database artifact as the consumption contract. Consumers can choose to load the Parquet
@@ -51,7 +54,8 @@ Each publish to the Hugging Face dataset repo should be treated as a physical sn
 should pin the full Hugging Face commit SHA rather than relying on `main`.
 
 The manifest should record artifact paths, schema versions, source snapshot IDs, recipe versions,
-row counts, published timestamp, and compatibility notes. Publication tooling returns the full
+row counts, published timestamp, and compatibility notes. Source snapshot/provider-run tables carry
+the full audit detail behind those IDs. Publication tooling returns the full
 Hugging Face commit SHA for exact pinning and can create supported release tags. The manifest does
 not try to contain the SHA of the commit that contains itself; that self-referential contract is not
 stable on Git-backed dataset hosts.

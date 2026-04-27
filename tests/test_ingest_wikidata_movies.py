@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from media_offline_database.build_movie import build_wikidata_movie_artifact
 from media_offline_database.cli import app
+from media_offline_database.ingest_normalization import load_provider_runs, load_source_snapshots
 from media_offline_database.ingest_wikidata_movies import (
     WikidataMovieRecord,
     normalize_wikidata_movie_records,
@@ -69,8 +70,15 @@ def test_build_wikidata_movie_artifact_writes_publishable_manifest(tmp_path: Pat
     relationship_file = next(file for file in manifest["files"] if file["kind"] == "relationships")
     entities = pl.read_parquet(result.manifest_path.parent / entity_file["path"])
     relationships = pl.read_parquet(result.manifest_path.parent / relationship_file["path"])
+    source_snapshots = load_source_snapshots(result.source_snapshot_path)
+    provider_runs = load_provider_runs(result.provider_run_path)
 
     assert result.total_candidates == 2
+    assert source_snapshots[0].source_id == "wikidata"
+    assert source_snapshots[0].record_count == 2
+    assert provider_runs[0].source_snapshot_id == source_snapshots[0].source_snapshot_id
+    assert provider_runs[0].request_count == 1
+    assert provider_runs[0].secret_refs == ()
     assert manifest["domains"] == ["movie"]
     assert manifest["entity_row_count"] == 2
     assert manifest["relationship_row_count"] == 2

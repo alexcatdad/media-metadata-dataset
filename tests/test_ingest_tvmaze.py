@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from media_offline_database.build_tv import build_tvmaze_tv_artifact
 from media_offline_database.cli import app
+from media_offline_database.ingest_normalization import load_provider_runs, load_source_snapshots
 from media_offline_database.ingest_tvmaze import TVmazeShow, normalize_tvmaze_show
 
 runner = CliRunner()
@@ -65,8 +66,15 @@ def test_build_tvmaze_tv_artifact_writes_publishable_manifest(tmp_path: Path) ->
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     entity_file = next(file for file in manifest["files"] if file["kind"] == "entities")
     entities = pl.read_parquet(result.manifest_path.parent / entity_file["path"])
+    source_snapshots = load_source_snapshots(result.source_snapshot_path)
+    provider_runs = load_provider_runs(result.provider_run_path)
 
     assert result.total_candidates == 1
+    assert source_snapshots[0].source_id == "tvmaze"
+    assert source_snapshots[0].record_count == 1
+    assert provider_runs[0].source_snapshot_id == source_snapshots[0].source_snapshot_id
+    assert provider_runs[0].request_count == 1
+    assert provider_runs[0].secret_refs == ()
     assert manifest["domains"] == ["tv"]
     assert manifest["entity_row_count"] == 1
     assert manifest["relationship_row_count"] == 0

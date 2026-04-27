@@ -27,7 +27,7 @@ where their current role allows it. Do not publish restricted fields from those 
 
 ## Snapshot Metadata Contract
 
-Every adapter or normalization path should be able to produce:
+Every adapter or normalization path used by public v1 artifact builds must produce:
 
 - `source_snapshots`: source ID, role, snapshot kind, source/fetch timestamps, policy versions,
   record counts, content hash, and manifest URI where applicable.
@@ -39,8 +39,8 @@ Every adapter or normalization path should be able to produce:
 Provider run records must not expose tokens, API keys, request authorization headers, or raw secret
 values.
 
-The provisional source-path field class is only a planning hint for this lane. Replace it with the
-shared source field policy contract before writing public artifacts.
+The provisional source-path field class is only a planning hint for planning records. Public v1
+artifacts use the reviewed source/field/artifact publishability policy instead.
 
 ## Commands
 
@@ -85,8 +85,10 @@ docker compose run --rm app pytest
 ## B-0009 And B-0010 Gate
 
 The first executable TV/movie milestone commands compile source-backed shared entity and relationship
-surfaces. They are enough to prove the source paths run in Docker, but the v1-quality artifact still
-needs profile, provenance, title, and external-ID table materialization before v1 can be declared.
+surfaces and emit source metadata sidecars. They are enough to prove the source paths run in Docker.
+The v1-quality artifact is declared only after those rows flow into profile, provenance, title,
+external-ID, `source_snapshots`, `provider_runs`, and `source_records` tables and pass release
+readiness.
 
 Before turning the TVmaze and Wikidata paths into public artifacts:
 

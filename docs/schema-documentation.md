@@ -12,7 +12,7 @@ status, then load the referenced Parquet files into their own tools.
 
 | Tier | Purpose | Compatibility rule | Examples |
 |---|---|---|---|
-| `core` | Shared cross-domain public contract | Backward-compatible within a major version | `entities`, `titles`, `external_ids`, `relationships`, `relationship_evidence`, `facets`, `provenance` |
+| `core` | Shared cross-domain public contract | Backward-compatible within a major version | `entities`, `titles`, `external_ids`, `relationships`, `relationship_evidence`, `facets`, `provenance`, `source_records`, `source_snapshots`, `provider_runs` |
 | `profile` | Domain-specific fields | Independently versioned by profile | `anime_profile`, `tv_profile`, `movie_profile` |
 | `derived` | Recomputable enhancement output | Recipe-versioned; breaking changes require manifest notices | `retrieval_text`, `embeddings`, materialized inferred facets, future `similarity_candidates` |
 | `experimental` | Trial surfaces | No stability guarantee; must be clearly marked | candidate queues, exploratory judgments, benchmark-only outputs |
@@ -147,6 +147,48 @@ queryable values, not raw provider taxonomies by default.
 `source_tags`, normalized `facets`, and inferred `judgments` stay separate. Inferred values must
 enter judgment surfaces first and may become facets only through an explicit materialization
 recipe, confidence threshold, provenance link, and publishability validation.
+
+### `source_snapshots`
+
+Source snapshot audit rows make source versioning and refresh windows queryable instead of only
+manifest-level metadata.
+
+| Field | Purpose |
+|---|---|
+| `source_snapshot_id` | Stable snapshot ID referenced by provenance and source records. |
+| `source_id` | Reviewed source namespace such as `manami`, `tvmaze`, or `wikidata`. |
+| `source_role` | Reviewed source role used for publishability. |
+| `snapshot_kind` | Release file, API fetch window, SPARQL query window, or other adapter kind. |
+| `fetched_at` | Timestamp when the source snapshot was fetched or compiled. |
+| `source_published_at` | Source-published timestamp where applicable. |
+| `fetch_window_started_at` / `fetch_window_finished_at` | Window covered by an API/query run. |
+| `source_version` | Source-native version or release marker. |
+| `policy_version` | Source policy version applied. |
+| `publishable_field_policy_version` | Field policy version applied. |
+| `artifact_policy_version` | Artifact policy version applied. |
+| `record_count` | Number of normalized source records covered. |
+| `content_hash` | Hash of the normalized source-backed rows when available. |
+| `manifest_uri` | Source manifest URI or local release path where applicable. |
+
+### `provider_runs`
+
+Provider run audit rows describe adapter execution without storing credentials or raw restricted
+payloads.
+
+| Field | Purpose |
+|---|---|
+| `provider_run_id` | Stable run ID referenced by provenance and source records. |
+| `source_id` | Reviewed source namespace. |
+| `source_snapshot_id` | Snapshot produced or consumed by the run. |
+| `adapter_name` | Adapter or normalizer name. |
+| `adapter_version` | Adapter implementation version. |
+| `started_at` / `finished_at` | Execution timestamps. |
+| `request_count` | Public request count or equivalent source access count. |
+| `cache_hit_count` | Cache-hit count when tracked. |
+| `status` | Run status such as `completed` or `failed`. |
+| `auth_shape` | Auth mode shape such as `none`, `api_key`, or `bearer`; never the value. |
+| `secret_refs` | Secret names only, never tokens, authorization headers, or secret values. |
+| `notes` | Human-readable audit note without restricted payload fields. |
 
 ## Domain Profiles
 

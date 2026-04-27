@@ -19,9 +19,12 @@ The gate is artifact-aware. For `media-metadata-v1`, it requires:
 - anime, TV, and movie domains;
 - source coverage for `manami`, `tvmaze`, and `wikidata`;
 - release-grade source snapshot IDs instead of `*:unspecified`;
-- required v1 core/profile tables and matching manifest `files`;
+- required v1 core/profile tables, including `source_snapshots` and `provider_runs`, and matching
+  manifest `files`;
 - readable Parquet files with row counts and columns matching table contracts;
 - non-null required columns;
+- every `source_records` and `provenance` source snapshot/provider run reference resolves to
+  `source_snapshots` and `provider_runs`;
 - at least one meaningful entity/title/external-ID/source-record/profile path per v1 domain.
 
 ## Validation

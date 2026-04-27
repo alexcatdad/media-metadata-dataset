@@ -28,6 +28,8 @@ REQUIRED_V1_TABLES = {
     "relationship_evidence",
     "facets",
     "provenance",
+    "source_snapshots",
+    "provider_runs",
     "source_records",
     "anime_profile",
     "tv_profile",
@@ -40,6 +42,8 @@ REQUIRED_NON_EMPTY_TABLES = {
     "titles",
     "external_ids",
     "provenance",
+    "source_snapshots",
+    "provider_runs",
     "source_records",
     "anime_profile",
     "tv_profile",
@@ -145,6 +149,7 @@ def _validate_v1_release_readiness(
         )
 
     findings.extend(_validate_cross_domain_rows(frames))
+    findings.extend(_validate_source_metadata_joins(frames))
     return findings
 
 
@@ -361,10 +366,65 @@ def _validate_cross_domain_rows(frames: Mapping[str, pl.DataFrame]) -> list[Rele
     return findings
 
 
+def _validate_source_metadata_joins(
+    frames: Mapping[str, pl.DataFrame],
+) -> list[ReleaseReadinessFinding]:
+    required_frames = {"source_records", "provenance", "source_snapshots", "provider_runs"}
+    if not required_frames.issubset(frames):
+        return []
+
+    findings: list[ReleaseReadinessFinding] = []
+    source_snapshots = frames["source_snapshots"]
+    provider_runs = frames["provider_runs"]
+    source_records = frames["source_records"]
+    provenance = frames["provenance"]
+
+    snapshot_ids = _string_column_set(source_snapshots, "source_snapshot_id")
+    provider_run_ids = _string_column_set(provider_runs, "provider_run_id")
+    for table_name, frame in {
+        "source_records": source_records,
+        "provenance": provenance,
+    }.items():
+        missing_snapshots = _non_null_string_column_set(frame, "source_snapshot_id") - snapshot_ids
+        if missing_snapshots:
+            findings.append(
+                _error(
+                    "source_snapshot_join_missing",
+                    "Rows reference source_snapshot_id values missing from source_snapshots.",
+                    table_name,
+                )
+            )
+        missing_provider_runs = _non_null_string_column_set(frame, "provider_run_id") - provider_run_ids
+        if missing_provider_runs:
+            findings.append(
+                _error(
+                    "provider_run_join_missing",
+                    "Rows reference provider_run_id values missing from provider_runs.",
+                    table_name,
+                )
+            )
+    return findings
+
+
 def _entity_id_set(frame: pl.DataFrame) -> set[str]:
     if "entity_id" not in frame.columns:
         return set()
     return {str(value) for value in frame.get_column("entity_id").to_list()}
+
+
+def _string_column_set(frame: pl.DataFrame, column: str) -> set[str]:
+    if column not in frame.columns:
+        return set()
+    return {str(value) for value in frame.get_column(column).to_list()}
+
+
+def _non_null_string_column_set(frame: pl.DataFrame, column: str) -> set[str]:
+    if column not in frame.columns:
+        return set()
+    return {
+        str(value)
+        for value in frame.get_column(column).drop_nulls().to_list()
+    }
 
 
 def _entries_by_name(raw_entries: object, *, key_name: str) -> dict[str, dict[str, Any]]:

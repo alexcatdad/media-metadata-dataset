@@ -300,6 +300,28 @@ V1CoreSourceSnapshotIdOption = Annotated[
         help="Source snapshot mapping as source_id=snapshot_id. May be passed more than once.",
     ),
 ]
+V1CoreSourceSnapshotPathOption = Annotated[
+    list[Path] | None,
+    typer.Option(
+        "--source-snapshot-path",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="SourceSnapshot JSONL sidecar to include. May be passed more than once.",
+    ),
+]
+V1CoreProviderRunPathOption = Annotated[
+    list[Path] | None,
+    typer.Option(
+        "--provider-run-path",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="ProviderRun JSONL sidecar to include. May be passed more than once.",
+    ),
+]
 HfRepoIdOption = Annotated[
     str | None,
     typer.Option(
@@ -546,6 +568,8 @@ def anime_build(
             "normalized_seed": str(result.normalized_seed_path),
             "relation_enriched_seed": str(result.relation_enriched_seed_path),
             "metadata_enriched_seed": str(result.metadata_enriched_seed_path),
+            "source_snapshot": str(result.source_snapshot_path),
+            "provider_run": str(result.provider_run_path),
             "manifest": str(result.manifest_path),
         }
     )
@@ -567,6 +591,8 @@ def tvmaze_build(
             "snapshot_id": result.snapshot_id,
             "total_candidates": result.total_candidates,
             "normalized_seed": str(result.normalized_seed_path),
+            "source_snapshot": str(result.source_snapshot_path),
+            "provider_run": str(result.provider_run_path),
             "manifest": str(result.manifest_path),
         }
     )
@@ -588,6 +614,8 @@ def wikidata_movie_build(
             "snapshot_id": result.snapshot_id,
             "total_candidates": result.total_candidates,
             "normalized_seed": str(result.normalized_seed_path),
+            "source_snapshot": str(result.source_snapshot_path),
+            "provider_run": str(result.provider_run_path),
             "manifest": str(result.manifest_path),
         }
     )
@@ -598,6 +626,8 @@ def v1_core_artifact(
     input_path: V1CoreInputPathOption,
     output_dir: V1CoreOutputDirOption = DEFAULT_V1_OUTPUT_DIR,
     source_snapshot_id: V1CoreSourceSnapshotIdOption = None,
+    source_snapshot_path: V1CoreSourceSnapshotPathOption = None,
+    provider_run_path: V1CoreProviderRunPathOption = None,
 ) -> None:
     """Compile bootstrap-like seeds into v1 shared core and profile tables."""
 
@@ -605,6 +635,8 @@ def v1_core_artifact(
         input_paths=input_path,
         output_dir=output_dir,
         source_snapshot_ids=_parse_source_snapshot_ids(source_snapshot_id),
+        source_snapshot_paths=source_snapshot_path,
+        provider_run_paths=provider_run_path,
     )
     console.print({"manifest": str(manifest_path)})
 

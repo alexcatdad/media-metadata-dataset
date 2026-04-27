@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -128,6 +129,42 @@ class ProviderRun(BaseModel):
         if self.cache_hit_count > self.request_count:
             raise ValueError("cache hits cannot exceed request count")
         return self
+
+
+def load_source_snapshots(path: Path) -> list[SourceSnapshot]:
+    return [
+        SourceSnapshot.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def write_source_snapshots(path: Path, snapshots: list[SourceSnapshot]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(snapshot.model_dump_json() for snapshot in snapshots)
+        + ("\n" if snapshots else ""),
+        encoding="utf-8",
+    )
+    return path
+
+
+def load_provider_runs(path: Path) -> list[ProviderRun]:
+    return [
+        ProviderRun.model_validate_json(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def write_provider_runs(path: Path, provider_runs: list[ProviderRun]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(provider_run.model_dump_json() for provider_run in provider_runs)
+        + ("\n" if provider_runs else ""),
+        encoding="utf-8",
+    )
+    return path
 
 
 class SourceRecordRef(BaseModel):
