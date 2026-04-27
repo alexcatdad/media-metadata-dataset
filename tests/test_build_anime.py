@@ -10,7 +10,11 @@ from media_offline_database.build_anime import build_manami_anime_artifact
 from media_offline_database.cli import app
 from media_offline_database.enrich_anilist_metadata import AniListResolvedMetadata
 from media_offline_database.enrich_anilist_relations import AniListResolvedRelation
-from media_offline_database.ingest_normalization import load_provider_runs, load_source_snapshots
+from media_offline_database.ingest_normalization import (
+    load_adapter_rejection_summary,
+    load_provider_runs,
+    load_source_snapshots,
+)
 
 runner = CliRunner()
 
@@ -53,6 +57,17 @@ def test_build_manami_anime_artifact_runs_full_pipeline(tmp_path: Path) -> None:
                         "synonyms": [],
                         "relatedAnime": [],
                         "tags": ["Adventure"],
+                    },
+                    {
+                        "sources": ["https://animecountdown.com/644821"],
+                        "title": "Unsupported Source Anime",
+                        "type": "TV",
+                        "episodes": 1,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SPRING", "year": 2026},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
                     },
                 ],
             }
@@ -104,20 +119,35 @@ def test_build_manami_anime_artifact_runs_full_pipeline(tmp_path: Path) -> None:
     metadata_entities = load_bootstrap_entities(result.metadata_enriched_seed_path)
     source_snapshots = load_source_snapshots(result.source_snapshot_path)
     provider_runs = load_provider_runs(result.provider_run_path)
+    rejection_summary = load_adapter_rejection_summary(result.rejection_summary_path)
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
 
     assert relation_fetch_calls == [97986, 109911]
     assert metadata_fetch_calls == [97986, 109911]
     assert result.snapshot_id == "2026-04-25"
     assert result.start_offset == 0
-    assert result.end_offset == 2
-    assert result.next_offset == 2
-    assert result.total_candidates == 2
+    assert result.end_offset == 3
+    assert result.next_offset == 3
+    assert result.total_candidates == 3
+    assert result.selected_candidate_count == 3
+    assert result.normalized_record_count == 2
+    assert result.skipped_candidate_count == 1
+    assert result.rejection_reasons == {"unsupported_source_url": 1}
     assert result.last_completed_item_key == "anime:manami:anidb:14177"
     assert source_snapshots[0].source_snapshot_id == "manami:2026-04-25"
     assert source_snapshots[0].record_count == 2
     assert provider_runs[0].source_snapshot_id == source_snapshots[0].source_snapshot_id
     assert provider_runs[0].secret_refs == ()
+    assert (
+        "Selected candidates: 3; normalized records: 2; skipped candidates: 1"
+        in (provider_runs[0].notes or "")
+    )
+    assert rejection_summary.selected_candidate_count == 3
+    assert rejection_summary.normalized_record_count == 2
+    assert rejection_summary.skipped_candidate_count == 1
+    assert rejection_summary.rejection_reasons == {"unsupported_source_url": 1}
+    assert rejection_summary.rejections[0].candidate_index == 2
+    assert rejection_summary.rejections[0].detail == "sources"
 
     assert normalized_entities[0].related[0].relationship == "related_anime"
     assert len(relation_entities[0].related) == 1

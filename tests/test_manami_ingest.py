@@ -10,6 +10,7 @@ from media_offline_database.ingest_manami import (
     load_manami_release,
     normalize_manami_entry,
     normalize_manami_release,
+    normalize_manami_release_batch,
     parse_manami_source_ref,
     write_normalized_manami_seed,
 )
@@ -251,6 +252,80 @@ def test_normalize_manami_release_skips_entries_without_supported_sources(tmp_pa
     assert [entity.title for entity in entities] == ["Cowboy Bebop"]
 
 
+def test_normalize_manami_release_batch_accounts_for_rejected_candidates(tmp_path: Path) -> None:
+    fixture_path = tmp_path / "manami-release.json"
+    fixture_path.write_text(
+        json.dumps(
+            {
+                "repository": "https://github.com/manami-project/anime-offline-database",
+                "lastUpdate": "2026-04-02",
+                "data": [
+                    {
+                        "sources": ["https://animecountdown.com/644821"],
+                        "title": "Unsupported Source",
+                        "type": "TV",
+                        "episodes": 13,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SUMMER", "year": 2017},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                    {
+                        "sources": ["https://anidb.net/anime/23"],
+                        "type": "TV",
+                        "episodes": 26,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SPRING", "year": 1998},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                    {
+                        "sources": ["https://anidb.net/anime/12681"],
+                        "title": "Missing Year",
+                        "type": "TV",
+                        "episodes": 13,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SUMMER", "year": None},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                    {
+                        "sources": ["https://anidb.net/anime/1"],
+                        "title": "Kept Anime",
+                        "type": "TV",
+                        "episodes": 1,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SPRING", "year": 2001},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    batch = normalize_manami_release_batch(load_manami_release(fixture_path))
+
+    assert [entity.title for entity in batch.entities] == ["Kept Anime"]
+    assert batch.selected_candidate_count == 4
+    assert batch.normalized_record_count == 1
+    assert batch.skipped_candidate_count == 3
+    assert batch.rejection_reasons == {
+        "missing_required_field": 2,
+        "unsupported_source_url": 1,
+    }
+    assert [(rejection.candidate_index, rejection.reason, rejection.detail) for rejection in batch.rejections] == [
+        (0, "unsupported_source_url", "sources"),
+        (1, "missing_required_field", "title"),
+        (2, "missing_required_field", "animeSeason.year"),
+    ]
+
+
 def test_normalize_manami_entry_ignores_unsupported_hosts_when_supported_ones_exist() -> None:
     entry = ManamiAnimeEntry.model_validate(
         {
@@ -313,7 +388,7 @@ def test_normalize_manami_entry_requires_release_year(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=r"missing animeSeason\.year"):
         normalize_manami_entry(
-            load_manami_release(fixture_path).data[0],
+            ManamiAnimeEntry.model_validate(load_manami_release(fixture_path).data[0]),
             record_source="manami-project/anime-offline-database release 2026-04-02",
         )
 

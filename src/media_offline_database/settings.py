@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     mod_data_dir: Path = Field(default=Path(".mod/data"), validation_alias="MOD_DATA_DIR")
     mod_cache_dir: Path = Field(default=Path(".mod/cache"), validation_alias="MOD_CACHE_DIR")
     mod_output_dir: Path = Field(default=Path(".mod/out"), validation_alias="MOD_OUTPUT_DIR")
+    provider_run_guard_stale_seconds: int = Field(
+        default=6 * 60 * 60,
+        validation_alias="PROVIDER_RUN_GUARD_STALE_SECONDS",
+    )
     hf_token: str | None = Field(default=None, validation_alias="HF_TOKEN")
     hf_namespace: str | None = Field(
         default=None,

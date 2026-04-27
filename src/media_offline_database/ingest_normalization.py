@@ -131,6 +131,72 @@ class ProviderRun(BaseModel):
         return self
 
 
+def _empty_adapter_candidate_rejections() -> list[AdapterCandidateRejection]:
+    return []
+
+
+class AdapterCandidateRejection(BaseModel):
+    """Secret-free reason why an adapter skipped one selected source candidate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_index: int = Field(ge=0)
+    reason: str = Field(min_length=1)
+    detail: str | None = None
+
+
+class AdapterRejectionSummary(BaseModel):
+    """Adapter-local candidate accounting for a normalized run or batch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    adapter_name: str = Field(min_length=1)
+    adapter_version: str = Field(min_length=1)
+    source_id: str = Field(min_length=1)
+    source_snapshot_id: str | None = None
+    selected_candidate_count: int = Field(ge=0)
+    normalized_record_count: int = Field(ge=0)
+    skipped_candidate_count: int = Field(ge=0)
+    rejection_reasons: dict[str, int] = Field(default_factory=dict)
+    rejections: list[AdapterCandidateRejection] = Field(
+        default_factory=_empty_adapter_candidate_rejections
+    )
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> AdapterRejectionSummary:
+        if (
+            self.normalized_record_count + self.skipped_candidate_count
+            != self.selected_candidate_count
+        ):
+            raise ValueError(
+                "normalized and skipped candidates must add up to selected candidates"
+            )
+        if sum(self.rejection_reasons.values()) != self.skipped_candidate_count:
+            raise ValueError("rejection reason counts must add up to skipped candidates")
+        if len(self.rejections) != self.skipped_candidate_count:
+            raise ValueError("rejections must include one row per skipped candidate")
+        return self
+
+
+def write_adapter_rejection_summary(
+    path: Path,
+    summary: AdapterRejectionSummary,
+) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        summary.model_dump_json() + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def load_adapter_rejection_summary(path: Path) -> AdapterRejectionSummary:
+    return AdapterRejectionSummary.model_validate_json(
+        path.read_text(encoding="utf-8")
+    )
+
+
 def load_source_snapshots(path: Path) -> list[SourceSnapshot]:
     return [
         SourceSnapshot.model_validate_json(line)

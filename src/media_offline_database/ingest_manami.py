@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from media_offline_database.bootstrap import BootstrapEntity, BootstrapRelatedEdge
+from media_offline_database.ingest_normalization import AdapterCandidateRejection
 from media_offline_database.sources import SourceRole
 
 _ANIDB_PATTERN = re.compile(r"^/anime/(?P<id>\d+)$")
@@ -63,7 +65,7 @@ class ManamiRelease(BaseModel):
 
     repository: str
     lastUpdate: str
-    data: list[ManamiAnimeEntry]
+    data: list[dict[str, Any]]
 
 
 class ParsedSourceRef(BaseModel):
@@ -78,11 +80,22 @@ class ParsedSourceRef(BaseModel):
         return f"anime:manami:{self.provider}:{self.external_id}"
 
 
+def _empty_adapter_candidate_rejections() -> list[AdapterCandidateRejection]:
+    return []
+
+
 class NormalizedManamiBatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     snapshot_id: str
     total_candidates: int
+    selected_candidate_count: int
+    normalized_record_count: int
+    skipped_candidate_count: int
+    rejection_reasons: dict[str, int] = Field(default_factory=dict)
+    rejections: list[AdapterCandidateRejection] = Field(
+        default_factory=_empty_adapter_candidate_rejections
+    )
     start_offset: int
     end_offset: int
     next_offset: int
@@ -208,21 +221,48 @@ def normalize_manami_release_batch(
 
     end_offset = start_offset + len(batch_entries)
     normalized_entities: list[BootstrapEntity] = []
-    for entry in batch_entries:
-        try:
-            normalized_entities.append(
-                normalize_manami_entry(entry, record_source=record_source)
-            )
-        except ValueError:
+    rejections: list[AdapterCandidateRejection] = []
+    for candidate_index, candidate in enumerate(batch_entries, start=start_offset):
+        entry = _validate_manami_candidate(candidate, candidate_index, rejections)
+        if entry is None:
             continue
+        if entry.animeSeason.year is None:
+            rejections.append(
+                AdapterCandidateRejection(
+                    candidate_index=candidate_index,
+                    reason="missing_required_field",
+                    detail="animeSeason.year",
+                )
+            )
+            continue
+        if not _parse_supported_source_refs(entry.sources):
+            rejections.append(
+                AdapterCandidateRejection(
+                    candidate_index=candidate_index,
+                    reason="unsupported_source_url",
+                    detail="sources",
+                )
+            )
+            continue
+
+        normalized_entities.append(
+            normalize_manami_entry(entry, record_source=record_source)
+        )
 
     last_completed_item_key = None
     if normalized_entities:
         last_completed_item_key = normalized_entities[-1].entity_id
 
+    rejection_reasons = Counter(rejection.reason for rejection in rejections)
+
     return NormalizedManamiBatch(
         snapshot_id=manami_snapshot_id(release),
         total_candidates=total_candidates,
+        selected_candidate_count=len(batch_entries),
+        normalized_record_count=len(normalized_entities),
+        skipped_candidate_count=len(rejections),
+        rejection_reasons=dict(sorted(rejection_reasons.items())),
+        rejections=rejections,
         start_offset=start_offset,
         end_offset=end_offset,
         next_offset=end_offset,
@@ -258,19 +298,45 @@ def _filtered_entries(
     *,
     limit: int | None,
     title_contains: str | None,
-) -> list[ManamiAnimeEntry]:
+) -> list[dict[str, Any]]:
     entries = release.data
 
     if title_contains is not None:
         normalized_query = title_contains.casefold()
         entries = [
-            entry for entry in entries if normalized_query in entry.title.casefold()
+            entry
+            for entry in entries
+            if normalized_query in str(entry.get("title", "")).casefold()
         ]
 
     if limit is not None:
         entries = entries[:limit]
 
     return entries
+
+
+def _validate_manami_candidate(
+    candidate: dict[str, Any],
+    candidate_index: int,
+    rejections: list[AdapterCandidateRejection],
+) -> ManamiAnimeEntry | None:
+    try:
+        return ManamiAnimeEntry.model_validate(candidate)
+    except ValidationError as error:
+        missing_fields = [
+            ".".join(str(part) for part in validation_error["loc"])
+            for validation_error in error.errors()
+            if validation_error["type"] == "missing"
+        ]
+        detail = ",".join(sorted(missing_fields)) if missing_fields else "candidate_shape"
+        rejections.append(
+            AdapterCandidateRejection(
+                candidate_index=candidate_index,
+                reason="missing_required_field",
+                detail=detail,
+            )
+        )
+        return None
 
 
 def _select_canonical_source(parsed_sources: list[ParsedSourceRef]) -> ParsedSourceRef:

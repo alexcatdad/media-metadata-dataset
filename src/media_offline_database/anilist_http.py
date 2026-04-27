@@ -38,6 +38,7 @@ def post_anilist_graphql(
                 transient_statuses=ANILIST_HTTP_CLIENT.retry_policy.transient_statuses,
                 reset_epoch_header=ANILIST_HTTP_CLIENT.retry_policy.reset_epoch_header,
             ),
+            budget_policy=ANILIST_HTTP_CLIENT.budget_policy,
             default_headers=ANILIST_HTTP_CLIENT.default_headers,
         )
 

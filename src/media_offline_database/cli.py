@@ -573,11 +573,16 @@ def anime_build(
             "end_offset": result.end_offset,
             "next_offset": result.next_offset,
             "total_candidates": result.total_candidates,
+            "selected_candidates": result.selected_candidate_count,
+            "normalized_records": result.normalized_record_count,
+            "skipped_candidates": result.skipped_candidate_count,
+            "rejection_reasons": result.rejection_reasons,
             "normalized_seed": str(result.normalized_seed_path),
             "relation_enriched_seed": str(result.relation_enriched_seed_path),
             "metadata_enriched_seed": str(result.metadata_enriched_seed_path),
             "source_snapshot": str(result.source_snapshot_path),
             "provider_run": str(result.provider_run_path),
+            "rejection_summary": str(result.rejection_summary_path),
             "manifest": str(result.manifest_path),
         }
     )

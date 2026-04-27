@@ -1,6 +1,7 @@
 # Ingest Normalization Runbook
 
-Use this runbook for work on backlog items B-0007 through B-0010.
+Use this runbook for work on backlog items B-0007 through B-0010 and adapter accounting work such
+as B-0024.
 
 ## Boundary
 
@@ -54,6 +55,12 @@ Run focused tests for this lane:
 
 ```sh
 docker compose run --rm app pytest tests/test_ingest_normalization.py tests/test_ingest_tvmaze.py tests/test_ingest_wikidata_movies.py tests/test_sources.py tests/test_docs_policy.py
+```
+
+Run focused Manami/anime adapter accounting tests:
+
+```sh
+docker compose run --rm app pytest tests/test_manami_ingest.py tests/test_build_anime.py
 ```
 
 Run the first TVmaze milestone build without publishing:

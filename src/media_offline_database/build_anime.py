@@ -22,8 +22,10 @@ from media_offline_database.ingest_manami import (
     normalize_manami_release_batch,
 )
 from media_offline_database.ingest_normalization import (
+    AdapterRejectionSummary,
     ProviderRun,
     SourceSnapshot,
+    write_adapter_rejection_summary,
     write_provider_runs,
     write_source_snapshots,
 )
@@ -46,12 +48,17 @@ class AnimeBuildResult(BaseModel):
     end_offset: int
     next_offset: int
     total_candidates: int
+    selected_candidate_count: int
+    normalized_record_count: int
+    skipped_candidate_count: int
+    rejection_reasons: dict[str, int]
     last_completed_item_key: str | None = None
     normalized_seed_path: Path
     relation_enriched_seed_path: Path
     metadata_enriched_seed_path: Path
     source_snapshot_path: Path
     provider_run_path: Path
+    rejection_summary_path: Path
     manifest_path: Path
 
 
@@ -81,6 +88,7 @@ def build_manami_anime_artifact(
     )
     source_snapshot_path = output_dir / "source-metadata" / "source-snapshots.jsonl"
     provider_run_path = output_dir / "source-metadata" / "provider-runs.jsonl"
+    rejection_summary_path = output_dir / "source-metadata" / "adapter-rejections.json"
     compiled_artifact_output_dir = artifact_output_dir or (output_dir / "compiled")
 
     started_at = datetime.now(tz=UTC)
@@ -116,11 +124,28 @@ def build_manami_anime_artifact(
     )
     finished_at = datetime.now(tz=UTC)
     fetched_at = _datetime_from_date(manami_snapshot_id(release))
+    source_snapshot_id = f"manami:{manami_snapshot_id(release)}"
+    rejection_summary = AdapterRejectionSummary(
+        adapter_name="manami-release-normalizer",
+        adapter_version=MANAMI_ADAPTER_VERSION,
+        source_id="manami",
+        source_snapshot_id=source_snapshot_id,
+        selected_candidate_count=normalized_batch.selected_candidate_count,
+        normalized_record_count=normalized_batch.normalized_record_count,
+        skipped_candidate_count=normalized_batch.skipped_candidate_count,
+        rejection_reasons=normalized_batch.rejection_reasons,
+        rejections=normalized_batch.rejections,
+        notes=(
+            "Candidate rejection accounting stores source offsets, reason codes, "
+            "and field names only; no restricted payload data is included."
+        ),
+    )
+    write_adapter_rejection_summary(rejection_summary_path, rejection_summary)
     write_source_snapshots(
         source_snapshot_path,
         [
             SourceSnapshot(
-                source_snapshot_id=f"manami:{manami_snapshot_id(release)}",
+                source_snapshot_id=source_snapshot_id,
                 source_id="manami",
                 source_role=SourceRole.BACKBONE_SOURCE,
                 snapshot_kind="release_file",
@@ -151,7 +176,13 @@ def build_manami_anime_artifact(
                 cache_hit_count=0,
                 status="completed",
                 auth_shape="none",
-                notes="Local release-file normalization; no secret values involved.",
+                notes=(
+                    "Local release-file normalization; no secret values involved. "
+                    f"Selected candidates: {normalized_batch.selected_candidate_count}; "
+                    f"normalized records: {normalized_batch.normalized_record_count}; "
+                    f"skipped candidates: {normalized_batch.skipped_candidate_count}; "
+                    f"rejection reasons: {normalized_batch.rejection_reasons}."
+                ),
             )
         ],
     )
@@ -162,12 +193,17 @@ def build_manami_anime_artifact(
         end_offset=normalized_batch.end_offset,
         next_offset=normalized_batch.next_offset,
         total_candidates=normalized_batch.total_candidates,
+        selected_candidate_count=normalized_batch.selected_candidate_count,
+        normalized_record_count=normalized_batch.normalized_record_count,
+        skipped_candidate_count=normalized_batch.skipped_candidate_count,
+        rejection_reasons=normalized_batch.rejection_reasons,
         last_completed_item_key=normalized_batch.last_completed_item_key,
         normalized_seed_path=normalized_seed_path,
         relation_enriched_seed_path=relation_enriched_seed_path,
         metadata_enriched_seed_path=metadata_enriched_seed_path,
         source_snapshot_path=source_snapshot_path,
         provider_run_path=provider_run_path,
+        rejection_summary_path=rejection_summary_path,
         manifest_path=manifest_path,
     )
 

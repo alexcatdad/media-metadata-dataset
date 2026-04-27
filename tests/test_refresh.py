@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from media_offline_database.enrich_anilist_metadata import AniListResolvedMetadata
+from media_offline_database.provider_http import ProviderRunGuard, ProviderRunGuardActiveError
 from media_offline_database.refresh import run_manami_refresh_checkpoint
 from media_offline_database.refresh_state import RefreshState
 from media_offline_database.settings import Settings
@@ -160,3 +163,63 @@ def test_run_manami_refresh_checkpoint_persists_resume_progress(tmp_path: Path) 
     assert resumed_result.next_offset == 2
     assert resumed_result.status == "completed"
     assert resumed_result.checkpoint_path.endswith("00000001-00000002")
+
+
+def test_run_manami_refresh_checkpoint_rejects_duplicate_guard(tmp_path: Path) -> None:
+    release_path = tmp_path / "manami-release.json"
+    release_path.write_text(
+        json.dumps(
+            {
+                "repository": "https://github.com/manami-project/anime-offline-database",
+                "lastUpdate": "2026-04-25",
+                "data": [
+                    {
+                        "sources": ["https://anilist.co/anime/1"],
+                        "title": "Cowboy Bebop",
+                        "type": "TV",
+                        "episodes": 26,
+                        "status": "FINISHED",
+                        "animeSeason": {"season": "SPRING", "year": 1998},
+                        "synonyms": [],
+                        "relatedAnime": [],
+                        "tags": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings.model_validate(
+        {
+            "HF_TOKEN": "hf_test",
+            "HF_NAMESPACE": "alecatdad",
+            "HF_DATASET_REPO": "media-metadata-dataset-test",
+            "MOD_CACHE_DIR": str(tmp_path / "cache"),
+        }
+    )
+    guard = ProviderRunGuard(
+        scope="refresh:anime.manami.default",
+        guard_dir=settings.mod_cache_dir / "provider-http" / "locks",
+        owner="test-owner",
+    )
+    guard.acquire()
+
+    with pytest.raises(ProviderRunGuardActiveError):
+        run_manami_refresh_checkpoint(
+            release_path=release_path,
+            output_dir=tmp_path / "out",
+            repo_id="alecatdad/media-metadata-dataset-test",
+            batch_size=1,
+            private_repo=True,
+            settings=settings,
+            api=FakeHfApi(),
+            remote_state=RefreshState(),
+            fetch_relations=lambda _anilist_id: (_ for _ in ()).throw(
+                AssertionError("build should not start")
+            ),
+            fetch_metadata=lambda _anilist_id: (_ for _ in ()).throw(
+                AssertionError("build should not start")
+            ),
+        )
+
+    guard.release()
