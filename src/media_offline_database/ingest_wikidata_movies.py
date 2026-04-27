@@ -6,10 +6,10 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, cast
 
-import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
 from media_offline_database.bootstrap import BootstrapEntity, BootstrapRelatedEdge
+from media_offline_database.provider_http import WIKIDATA_HTTP_CLIENT
 from media_offline_database.sources import SourceRole
 
 WIKIDATA_SOURCE_ID = "wikidata"
@@ -84,13 +84,12 @@ WHERE {{
 }}
 GROUP BY ?item
 """
-    response = httpx.get(
+    response = WIKIDATA_HTTP_CLIENT.get(
         "https://query.wikidata.org/sparql",
         params={"query": query, "format": "json"},
         headers={"User-Agent": WIKIDATA_USER_AGENT},
         timeout=45,
     )
-    response.raise_for_status()
     return _records_from_sparql(response.json())
 
 

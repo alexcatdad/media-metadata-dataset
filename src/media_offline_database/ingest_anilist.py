@@ -5,13 +5,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
-import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
+from media_offline_database.anilist_http import post_anilist_graphql
 from media_offline_database.bootstrap import BootstrapEntity
 from media_offline_database.sources import SourceRole
 
-_ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
 _ANILIST_SEARCH_QUERY = """
 query ($search: String!) {
   Page(page: 1, perPage: 10) {
@@ -178,20 +177,11 @@ def fetch_anilist_search_results(
     *,
     timeout_seconds: float = 20.0,
 ) -> list[AniListSearchMedia]:
-    response = httpx.post(
-        _ANILIST_GRAPHQL_URL,
-        json={
-            "query": _ANILIST_SEARCH_QUERY,
-            "variables": {"search": search},
-        },
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": "codex-media-metadata-dataset/1.0",
-        },
-        timeout=timeout_seconds,
+    response = post_anilist_graphql(
+        query=_ANILIST_SEARCH_QUERY,
+        variables={"search": search},
+        timeout_seconds=timeout_seconds,
     )
-    response.raise_for_status()
     payload = AniListSearchResponse.model_validate(response.json())
     if payload.data is None:
         return []

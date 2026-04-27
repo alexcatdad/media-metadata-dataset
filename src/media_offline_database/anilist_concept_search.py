@@ -4,10 +4,10 @@ import re
 from collections.abc import Callable
 from typing import cast
 
-import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-_ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
+from media_offline_database.anilist_http import post_anilist_graphql
+
 _WHITESPACE_RE = re.compile(r"\s+")
 _GENRE_KEYWORDS = {
     "action": "Action",
@@ -168,25 +168,16 @@ def fetch_anilist_concept_matches(
     *,
     timeout_seconds: float = 20.0,
 ) -> list[AniListSearchMedia]:
-    response = httpx.post(
-        _ANILIST_GRAPHQL_URL,
-        json={
-            "query": _SEARCH_QUERY,
-            "variables": {
-                "genreIn": filters.genres or None,
-                "tagIn": filters.tags or None,
-                "page": 1,
-                "perPage": limit,
-            },
+    response = post_anilist_graphql(
+        query=_SEARCH_QUERY,
+        variables={
+            "genreIn": filters.genres or None,
+            "tagIn": filters.tags or None,
+            "page": 1,
+            "perPage": limit,
         },
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "User-Agent": "codex-media-metadata-dataset/1.0",
-        },
-        timeout=timeout_seconds,
+        timeout_seconds=timeout_seconds,
     )
-    response.raise_for_status()
     payload = AniListSearchResponse.model_validate(response.json())
     if payload.data is None:
         return []

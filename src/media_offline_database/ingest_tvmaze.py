@@ -4,10 +4,10 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from media_offline_database.bootstrap import BootstrapEntity
+from media_offline_database.provider_http import TVMAZE_HTTP_CLIENT
 from media_offline_database.sources import SourceRole
 
 TVMAZE_SOURCE_ID = "tvmaze"
@@ -98,13 +98,12 @@ TVmazeFetchShow = Callable[[int], TVmazeShow]
 
 
 def fetch_tvmaze_show(show_id: int) -> TVmazeShow:
-    response = httpx.get(
+    response = TVMAZE_HTTP_CLIENT.get(
         f"https://api.tvmaze.com/shows/{show_id}",
         params=[("embed[]", "episodes"), ("embed[]", "seasons")],
         headers={"User-Agent": TVMAZE_USER_AGENT},
         timeout=30,
     )
-    response.raise_for_status()
     return TVmazeShow.model_validate(response.json())
 
 
