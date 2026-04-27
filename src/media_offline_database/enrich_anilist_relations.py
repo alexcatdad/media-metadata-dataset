@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-import httpx
 from pydantic import BaseModel, ConfigDict
 
+from media_offline_database.anilist_http import post_anilist_graphql
 from media_offline_database.bootstrap import (
     BootstrapEntity,
     BootstrapRelatedEdge,
@@ -14,7 +14,6 @@ from media_offline_database.bootstrap import (
 from media_offline_database.ingest_manami import parse_manami_source_ref
 from media_offline_database.relationships import deterministic_anilist_relationship_recipe
 
-_ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
 _ANILIST_RELATIONS_QUERY = """
 query ($id: Int!) {
   Media(id: $id, type: ANIME) {
@@ -82,19 +81,11 @@ type AniListRelationFetcher = Callable[[int], list[AniListResolvedRelation]]
 
 
 def fetch_anilist_relations(anilist_id: int, *, timeout_seconds: float = 20.0) -> list[AniListResolvedRelation]:
-    response = httpx.post(
-        _ANILIST_GRAPHQL_URL,
-        json={
-            "query": _ANILIST_RELATIONS_QUERY,
-            "variables": {"id": anilist_id},
-        },
-        headers={
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
-        timeout=timeout_seconds,
+    response = post_anilist_graphql(
+        query=_ANILIST_RELATIONS_QUERY,
+        variables={"id": anilist_id},
+        timeout_seconds=timeout_seconds,
     )
-    response.raise_for_status()
     payload = AniListGraphqlResponse.model_validate(response.json())
     media = payload.data.Media if payload.data is not None else None
     if media is None:
