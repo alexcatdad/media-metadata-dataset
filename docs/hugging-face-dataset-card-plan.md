@@ -1,8 +1,8 @@
 # Hugging Face Dataset Card Plan
 
-This is the planned structure for the Hugging Face dataset card. The card should describe published
-files and consumer expectations, not an API, hosted app, DuckDB artifact, graph browser, RAG
-service, or recommendation product.
+This is the planned structure for the Hugging Face dataset card and the publication tooling's
+rendered `README.md`. The card should describe published files and consumer expectations, not an
+API, hosted app, DuckDB artifact, graph browser, RAG service, or recommendation product.
 
 ## Card Goals
 

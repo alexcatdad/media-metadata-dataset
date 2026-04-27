@@ -34,6 +34,7 @@ from media_offline_database.hf_publish import (
     HF_REFRESH_STATE_PATH,
     load_hf_refresh_state,
     publish_checkpoint_bundle,
+    rehearse_publish_bundle,
     resolve_hf_repo_id,
 )
 from media_offline_database.ingest_anilist import write_anilist_search_seed
@@ -351,6 +352,13 @@ CheckpointPathOption = Annotated[
     typer.Option(
         "--checkpoint-path",
         help="Remote dataset path prefix for this artifact bundle.",
+    ),
+]
+RehearsalOutputDirOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--output-dir",
+        help="Optional directory where rehearsal artifacts such as README.md should be written.",
     ),
 ]
 ReleaseTagOption = Annotated[
@@ -756,6 +764,24 @@ def hf_publish(
         state=state,
         private=private,
         release_tag=release_tag,
+    )
+    console.print_json(json=result.model_dump_json(indent=2))
+
+
+@app.command("hf-rehearse-publish")
+def hf_rehearse_publish(
+    manifest_path: ManifestPathArgument,
+    repo_id: HfRepoIdOption = "local/media-metadata-dataset",
+    output_dir: RehearsalOutputDirOption = Path(".mod/out/hf-publication-rehearsal"),
+    private: HfPrivateOption = True,
+) -> None:
+    """Validate the publish bundle and render the dataset card without network upload."""
+
+    result = rehearse_publish_bundle(
+        manifest_path=manifest_path,
+        repo_id=repo_id or "local/media-metadata-dataset",
+        output_dir=output_dir,
+        private=private,
     )
     console.print_json(json=result.model_dump_json(indent=2))
 

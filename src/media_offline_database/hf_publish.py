@@ -104,6 +104,16 @@ class PublishBundle:
     allow_patterns: list[str]
 
 
+class PublishRehearsalResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_id: str
+    manifest_path: str
+    local_dir: str
+    allow_patterns: list[str]
+    dataset_card_path: str | None = None
+
+
 def resolve_hf_repo_id(
     *,
     settings: Settings,
@@ -141,6 +151,128 @@ def build_publish_bundle(manifest_path: Path) -> PublishBundle:
         manifest_path=manifest_path,
         local_dir=local_dir,
         allow_patterns=deduped_patterns,
+    )
+
+
+def render_hf_dataset_card(
+    *,
+    repo_id: str,
+    title: str,
+    private: bool,
+) -> str:
+    visibility_line = "private" if private else "public"
+    return "\n".join(
+        [
+            "---",
+            "pretty_name: Media Metadata Dataset",
+            "task_categories:",
+            "- information-retrieval",
+            "- feature-extraction",
+            "---",
+            "",
+            f"# {title}",
+            "",
+            "Open, non-commercial dataset artifacts for narrative screen media discovery.",
+            "",
+            "This dataset is distributed as Parquet tables plus a manifest. It is not an API, "
+            "hosted service, application, DuckDB database artifact, recommendation engine, graph "
+            "browser, or RAG serving layer.",
+            "",
+            "## Artifact Contract",
+            "",
+            "Consumers should read the manifest first, then load the referenced Parquet files. "
+            "The manifest records table paths, row counts, schema versions, source coverage, "
+            "policy versions, recipe versions, enrichment status, and source snapshot IDs.",
+            "",
+            "Current v1 tables include shared core surfaces such as `entities`, `titles`, "
+            "`external_ids`, `relationships`, `relationship_evidence`, `facets`, `provenance`, "
+            "`source_records`, `source_snapshots`, and `provider_runs`, plus domain profiles for "
+            "anime, TV, and movies.",
+            "",
+            "## Versioning And Pinning",
+            "",
+            "- Hugging Face Dataset Hub is the publication and continuity host.",
+            "- `main` is the moving latest pointer.",
+            "- Supported releases are tagged.",
+            "- Exact consumers should pin a full Hugging Face commit SHA or a supported release tag.",
+            "- Source snapshots and provider runs are exposed as manifest-linked Parquet tables.",
+            "",
+            "## Source Policy And Publishability",
+            "",
+            "Source roles are `BACKBONE_SOURCE`, `ID_SOURCE`, `LOCAL_EVIDENCE`, `RUNTIME_ONLY`, "
+            "`PAID_EXPERIMENT_ONLY`, and `BLOCKED`.",
+            "",
+            "Credentials, API tokens, public endpoints, and local access authorize reading only "
+            "when allowed by the provider. They do not imply redistribution rights.",
+            "",
+            "Public artifacts are governed by source policy, field policy, transform policy, and "
+            "artifact policy. Restricted or local-only provider data must not leak into public "
+            "Parquet tables, retrieval text, embeddings, judgments, or manifests.",
+            "",
+            "## Intended Use",
+            "",
+            "Downstream users may load these files into their own search, graph, recommendation, "
+            "or RAG systems. This dataset exposes reusable surfaces; downstream consumers own "
+            "interpretation, ranking, personalization, UI, and serving.",
+            "",
+            "## Limitations",
+            "",
+            "- V1 is not anime-only; it requires meaningful anime, TV, and movie source paths.",
+            "- Some records may be partially enriched. Consumers should inspect enrichment status.",
+            "- Source coverage depends on provider rights, publishability policy, and rate limits.",
+            "- LLM outputs are judgments until materialization gates approve derived outputs.",
+            "- Confidence is dimensional and recipe-specific, not one universal score.",
+            "",
+            "## License And Attribution",
+            "",
+            "License and attribution requirements are snapshot-specific and are recorded in the "
+            "manifest and source policy surfaces. Consumers are responsible for preserving required "
+            "attribution from the published snapshot.",
+            "",
+            "## Citation",
+            "",
+            "Cite the Hugging Face dataset repo, release tag or commit SHA, and manifest dataset "
+            "version used.",
+            "",
+            f"- Repo id: `{repo_id}`",
+            f"- Visibility: `{visibility_line}`",
+            "",
+        ]
+    )
+
+
+def rehearse_publish_bundle(
+    *,
+    manifest_path: Path,
+    repo_id: str,
+    output_dir: Path | None = None,
+    private: bool = True,
+) -> PublishRehearsalResult:
+    bundle = build_publish_bundle(manifest_path)
+    for pattern in bundle.allow_patterns:
+        source_path = bundle.local_dir / pattern
+        if not source_path.exists():
+            raise FileNotFoundError(f"bundle path missing for publish rehearsal: {source_path}")
+
+    dataset_card_path: Path | None = None
+    if output_dir is not None:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dataset_card_path = output_dir / "README.md"
+        dataset_card_path.write_text(
+            render_hf_dataset_card(
+                repo_id=repo_id,
+                title=repo_id.split("/")[-1],
+                private=private,
+            ),
+            encoding="utf-8",
+        )
+
+    return PublishRehearsalResult(
+        repo_id=repo_id,
+        manifest_path=str(bundle.manifest_path),
+        local_dir=str(bundle.local_dir),
+        allow_patterns=bundle.allow_patterns,
+        dataset_card_path=None if dataset_card_path is None else str(dataset_card_path),
     )
 
 
@@ -204,25 +336,10 @@ def write_hf_dataset_card(
     title: str,
     private: bool,
 ) -> None:
-    visibility_line = "private" if private else "public"
-    body = "\n".join(
-        [
-            "---",
-            "license: mit",
-            "pretty_name: Media Metadata Dataset Checkpoints",
-            "task_categories:",
-            "- text-classification",
-            "---",
-            "",
-            f"# {title}",
-            "",
-            "Checkpointed test dataset for Media Metadata Dataset refresh-state and publish smoke flows.",
-            "",
-            f"- Repo id: `{repo_id}`",
-            f"- Visibility: `{visibility_line}`",
-            "- Contents: manifests, parquet checkpoints, and refresh-state metadata.",
-            "",
-        ]
+    body = render_hf_dataset_card(
+        repo_id=repo_id,
+        title=title,
+        private=private,
     ).encode("utf-8")
     api.upload_file(
         path_or_fileobj=body,
@@ -246,6 +363,7 @@ def publish_checkpoint_bundle(
     write_dataset_card: bool = True,
     release_tag: str | None = None,
 ) -> HfPublishResult:
+    bundle = build_publish_bundle(manifest_path)
     api.create_repo(
         repo_id,
         token=token,
@@ -263,7 +381,6 @@ def publish_checkpoint_bundle(
             private=private,
         )
 
-    bundle = build_publish_bundle(manifest_path)
     bundle_commit_info = api.upload_folder(
         repo_id=repo_id,
         folder_path=bundle.local_dir,

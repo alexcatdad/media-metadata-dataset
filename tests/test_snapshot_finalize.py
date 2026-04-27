@@ -250,6 +250,47 @@ def test_publish_current_snapshot_uploads_snapshot_current_and_updates_state(
     assert job["current_snapshot_path"] == "current/anime.manami.default"
 
 
+def test_publish_current_snapshot_validates_before_remote_writes(tmp_path: Path) -> None:
+    artifact_dir = tmp_path / "compiled"
+    artifact_dir.mkdir(parents=True)
+    manifest_path = artifact_dir / "media-metadata-v1-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "media-metadata-v1",
+                "dataset_line": "media-metadata-v1",
+                "dataset_version": "0.1.0",
+                "core_schema_version": "core.v1",
+                "domains": ["anime"],
+                "source_coverage": [],
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=0,
+                ),
+                "files": [],
+                "tables": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    fake_api = FakeHfApi()
+
+    with pytest.raises(ReleaseReadinessError):
+        publish_current_snapshot(
+            api=fake_api,
+            token="hf_test",
+            repo_id="alecatdad/media-metadata-dataset-test",
+            manifest_path=manifest_path,
+            state=RefreshState(),
+            job_name="local.v1",
+            snapshot_id="2026-04-27",
+        )
+
+    assert fake_api.created_repos == []
+    assert fake_api.uploaded_files == []
+    assert fake_api.uploaded_folders == []
+
+
 def test_publish_current_snapshot_can_create_release_tag(tmp_path: Path) -> None:
     manifest_path = _write_manifest_bundle(tmp_path)
     fake_api = FakeHfApi()

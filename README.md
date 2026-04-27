@@ -193,6 +193,7 @@ Current commands:
 
 ```sh
 docker compose run --rm app mod hf-state --repo-id namespace/media-metadata-dataset-test
+docker compose run --rm app mod hf-rehearse-publish /path/to/manifest.json --repo-id namespace/media-metadata-dataset-test
 docker compose run --rm app mod hf-publish /path/to/manifest.json --repo-id namespace/media-metadata-dataset-test
 docker compose run --rm app mod hf-publish /path/to/manifest.json \
   --repo-id namespace/media-metadata-dataset-test \

@@ -9,6 +9,8 @@ from media_offline_database.hf_publish import (
     HF_REFRESH_STATE_PATH,
     build_publish_bundle,
     publish_checkpoint_bundle,
+    rehearse_publish_bundle,
+    render_hf_dataset_card,
     resolve_hf_repo_id,
 )
 from media_offline_database.publishability import PublishableUse, publishability_manifest_payload
@@ -208,6 +210,83 @@ def test_build_publish_bundle_rejects_unready_v1_manifest(tmp_path: Path) -> Non
         build_publish_bundle(manifest_path)
 
 
+def test_publish_checkpoint_bundle_validates_before_remote_writes(tmp_path: Path) -> None:
+    fake_api = FakeHfApi()
+    artifact_dir = tmp_path / "compiled"
+    artifact_dir.mkdir(parents=True)
+    manifest_path = artifact_dir / "media-metadata-v1-manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "artifact": "media-metadata-v1",
+                "dataset_line": "media-metadata-v1",
+                "dataset_version": "0.1.0",
+                "core_schema_version": "core.v1",
+                "domains": ["anime"],
+                "source_coverage": [],
+                "publishability": publishability_manifest_payload(
+                    [PublishableUse.PUBLIC_PARQUET, PublishableUse.PUBLIC_MANIFEST],
+                    input_count=0,
+                ),
+                "files": [],
+                "tables": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReleaseReadinessError):
+        publish_checkpoint_bundle(
+            api=fake_api,
+            token="hf_test",
+            repo_id="alecatdad/media-metadata-dataset-test",
+            manifest_path=manifest_path,
+            checkpoint_path="checkpoints/manual",
+            state=RefreshState(),
+        )
+
+    assert fake_api.created_repos == []
+    assert fake_api.uploaded_files == []
+    assert fake_api.uploaded_folders == []
+
+
+def test_render_hf_dataset_card_matches_dataset_boundary() -> None:
+    card = render_hf_dataset_card(
+        repo_id="alecatdad/media-metadata-dataset-test",
+        title="media-metadata-dataset-test",
+        private=True,
+    )
+
+    assert "Parquet tables plus a manifest" in card
+    assert "not an API" in card
+    assert "recommendation engine" in card
+    assert "source_snapshots" in card
+    assert "provider_runs" in card
+    assert "Credentials, API tokens" in card
+    assert "license: mit" not in card
+
+
+def test_rehearse_publish_bundle_validates_files_and_writes_card(tmp_path: Path) -> None:
+    manifest_path = _write_manifest_bundle(tmp_path)
+
+    result = rehearse_publish_bundle(
+        manifest_path=manifest_path,
+        repo_id="alecatdad/media-metadata-dataset-test",
+        output_dir=tmp_path / "rehearsal",
+        private=True,
+    )
+
+    assert result.allow_patterns == [
+        "sample-manifest.json",
+        "sample-entities.parquet",
+        "sample-relationships.parquet",
+    ]
+    assert result.dataset_card_path == str(tmp_path / "rehearsal" / "README.md")
+    assert result.dataset_card_path is not None
+    rendered_card = Path(result.dataset_card_path).read_text(encoding="utf-8")
+    assert "Parquet tables plus a manifest" in rendered_card
+
+
 def test_resolve_hf_repo_id_prefers_explicit_then_settings_then_whoami() -> None:
     fake_api = FakeHfApi()
     settings = Settings.model_validate(
@@ -288,6 +367,9 @@ def test_publish_checkpoint_bundle_uploads_artifact_and_state(tmp_path: Path) ->
         "README.md",
         HF_REFRESH_STATE_PATH,
     ]
+    dataset_card = fake_api.uploaded_files[0]["path_or_fileobj"]
+    assert isinstance(dataset_card, bytes)
+    assert "Parquet tables plus a manifest" in dataset_card.decode("utf-8")
     assert result.repo_id == "alecatdad/media-metadata-dataset-test"
     assert result.state_path == HF_REFRESH_STATE_PATH
     assert result.bundle_commit_sha == BUNDLE_COMMIT_SHA

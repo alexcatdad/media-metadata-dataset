@@ -11,6 +11,21 @@ Project pipeline commands run through Docker/Compose, not host Python.
 - The target Hugging Face dataset repo is explicit through `--repo-id` or `HF_NAMESPACE` plus
   `HF_DATASET_REPO`.
 - The artifact manifest was produced by a containerized build command.
+- The artifact passes release readiness.
+
+## Rehearse Publication Without Uploading
+
+Run this before any Hugging Face write. It validates the manifest bundle, checks referenced files,
+and renders the dataset card locally without network access or upload.
+
+```sh
+docker compose run --rm app mod hf-rehearse-publish /path/to/manifest.json \
+  --repo-id namespace/media-metadata-dataset-test \
+  --output-dir .mod/out/hf-publication-rehearsal
+```
+
+The command writes a local `README.md` dataset card and reports the exact manifest/file allow
+patterns that a real publish would upload.
 
 ## Publish A Checkpoint
 

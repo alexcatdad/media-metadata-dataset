@@ -421,6 +421,32 @@ PROFILE_TABLE_CONTRACTS: dict[str, TableContract] = {
 }
 
 
+DERIVED_TABLE_CONTRACTS: dict[str, TableContract] = {
+    "similarity_candidates": TableContract(
+        table_name="similarity_candidates",
+        schema_version="similarity_candidates.v1",
+        compatibility_tier=CompatibilityTier.DERIVED,
+        columns=(
+            column("candidate_id", "string", nullable=False),
+            column("source_entity_id", "string", nullable=False),
+            column("target_entity_id", "string", nullable=False),
+            column("candidate_direction", "string", nullable=False),
+            column("recipe_version", "string", nullable=False),
+            column("input_surface_versions", "string", nullable=False),
+            column("candidate_reasons", "list[string]", nullable=False),
+            column("score_overall", "float64"),
+            column("score_dimensions", "string", nullable=False),
+            column("confidence_profile", "string", nullable=False),
+            column("confidence_tier", "string", nullable=False),
+            column("evidence_refs", "list[string]", nullable=False),
+            column("provenance_refs", "list[string]", nullable=False),
+            column("quality_flags", "list[string]", nullable=False),
+            column("generated_at", "datetime", nullable=False),
+        ),
+    ),
+}
+
+
 IDENTITY_CHANGES_CONTRACT = TableContract(
     table_name="identity_changes",
     schema_version=CORE_SCHEMA_VERSION,
@@ -512,5 +538,6 @@ def resolve_identity_forward(
 ALL_TABLE_CONTRACTS: dict[str, TableContract] = {
     **CORE_TABLE_CONTRACTS,
     **PROFILE_TABLE_CONTRACTS,
+    **DERIVED_TABLE_CONTRACTS,
     "identity_changes": IDENTITY_CHANGES_CONTRACT,
 }

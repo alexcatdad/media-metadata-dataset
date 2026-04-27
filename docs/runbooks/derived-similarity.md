@@ -17,9 +17,18 @@ fixtures.
 profile, relationship, facet, retrieval, embedding, judgment-materialization, evidence, provenance,
 policy, and manifest surfaces.
 
+The current executable contract is `DERIVED_TABLE_CONTRACTS["similarity_candidates"]`. It is a
+post-v1 derived table contract, not a v1 readiness requirement, and it is intentionally absent from
+the required core/profile v1 artifact tables.
+
 Do not read raw source payloads, private experiment data, credentials-only provider data, or
 runtime-only values directly into public candidate rows. If an input is useful for similarity, first
 make it available through an accepted versioned surface and publishability gate.
+
+Current public inputs are the implemented core/profile surfaces, relationship/evidence surfaces,
+facets, provenance/source metadata, manifest metadata, and future retrieval/embedding surfaces once
+they pass publishability. LLM materialized sidecars are not public similarity inputs until a later
+accepted policy decision promotes them from private experiment output.
 
 Candidate rows must record:
 

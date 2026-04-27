@@ -89,6 +89,7 @@ def publish_current_snapshot(
     current_prefix: str = "current",
     release_tag: str | None = None,
 ) -> SnapshotFinalizeResult:
+    bundle = build_publish_bundle(manifest_path)
     api.create_repo(
         repo_id,
         token=token,
@@ -105,7 +106,6 @@ def publish_current_snapshot(
             private=private,
         )
 
-    bundle = build_publish_bundle(manifest_path)
     snapshot_path = f"{snapshot_prefix}/{job_name}/{snapshot_id}"
     current_path = f"{current_prefix}/{job_name}"
     snapshot_manifest_path = f"{snapshot_path}/{manifest_path.name}"

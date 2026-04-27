@@ -10,6 +10,7 @@ from media_offline_database.contracts import (
     ALL_TABLE_CONTRACTS,
     CORE_SCHEMA_VERSION,
     CORE_TABLE_CONTRACTS,
+    DERIVED_TABLE_CONTRACTS,
     IDENTITY_CHANGES_CONTRACT,
     PROFILE_TABLE_CONTRACTS,
     ArtifactManifest,
@@ -254,6 +255,32 @@ def test_profile_contracts_are_independently_versioned() -> None:
     assert "anime_format" in anime_columns
     assert "season_count" in tv_columns
     assert "runtime_minutes" in movie_columns
+
+
+def test_similarity_candidates_contract_aligns_with_base_surfaces_without_blocking_v1() -> None:
+    contract = DERIVED_TABLE_CONTRACTS["similarity_candidates"]
+    required = contract.required_column_names
+
+    assert contract.compatibility_tier == CompatibilityTier.DERIVED
+    assert contract.table_name in ALL_TABLE_CONTRACTS
+    assert contract.table_name not in CORE_TABLE_CONTRACTS
+    assert contract.table_name not in PROFILE_TABLE_CONTRACTS
+    for column_name in {
+        "candidate_id",
+        "source_entity_id",
+        "target_entity_id",
+        "recipe_version",
+        "input_surface_versions",
+        "candidate_reasons",
+        "score_dimensions",
+        "confidence_profile",
+        "confidence_tier",
+        "evidence_refs",
+        "provenance_refs",
+        "quality_flags",
+        "generated_at",
+    }:
+        assert column_name in required
 
 
 def test_identity_changes_contract_has_migration_fields() -> None:
